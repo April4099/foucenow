@@ -1,9 +1,25 @@
-const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
+let tray = null;
+let isQuitting = false;
 let updateAvailable = false;
+
+/* ========== 单实例（挂后台后从桌面图标唤回） ========== */
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
 
 /* ========== 自动更新配置 ========== */
 autoUpdater.autoDownload = false; // 不自动下载，先问用户
@@ -18,6 +34,7 @@ function createWindow() {
     backgroundColor: '#0A0A0E',
     title: '此刻 FocusNow',
     icon: path.join(__dirname, 'icon.png'),
+    frame: false, // 完全软件主体：去掉系统标题栏，自绘窗口按钮
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
@@ -34,14 +51,50 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  // ✕ 不销毁窗口，只隐藏到后台（计时继续）
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
   });
 
   // 启动 5 秒后检查更新
   setTimeout(() => {
     checkForUpdates();
   }, 5000);
+}
+
+/* ========== 系统托盘（挂后台后可唤回 / 完全退出） ========== */
+function createTray() {
+  tray = new Tray(path.join(__dirname, 'icon.png'));
+  tray.setToolTip('此刻 FocusNow（后台运行中）');
+  const menu = Menu.buildFromTemplate([
+    {
+      label: '打开主界面',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: '完全退出',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+  tray.setContextMenu(menu);
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
 }
 
 /* ========== 更新检查 ========== */
@@ -100,6 +153,7 @@ autoUpdater.on('update-downloaded', (info) => {
     cancelId: 1
   }).then(result => {
     if (result.response === 0) {
+      isQuitting = true;
       autoUpdater.quitAndInstall();
     }
   });
@@ -120,13 +174,41 @@ ipcMain.handle('get-version', () => {
   return app.getVersion();
 });
 
+// 窗口控制：最小化 / 最大化 / 关闭挂后台 / 完全退出
+ipcMain.handle('win-min', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.handle('win-max', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
+
+ipcMain.handle('win-hide', () => {
+  if (mainWindow) mainWindow.hide();
+});
+
+ipcMain.handle('app-quit', () => {
+  isQuitting = true;
+  app.quit();
+});
+
 /* ========== 应用生命周期 ========== */
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  createTray();
+});
 
 app.on('window-all-closed', () => {
-  app.quit();
+  // 有托盘时保持后台运行，不做任何事
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  else if (mainWindow) mainWindow.show();
 });

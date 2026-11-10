@@ -415,6 +415,66 @@ body {
   border-color: var(--danger);
 }
 
+/* ========== 窗口控制按钮（✕ 挂后台 / ⏻ 完全退出） ========== */
+.app-header {
+  -webkit-app-region: drag;
+}
+.app-header button,
+.app-header a,
+.app-header input,
+.app-header select {
+  -webkit-app-region: no-drag;
+}
+
+.win-controls {
+  display: flex; align-items: center; gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.win-btn {
+  width: 36px; height: 36px;
+  border: 1px solid var(--border); background: var(--bg-card);
+  border-radius: 10px; display: flex; align-items: center;
+  justify-content: center; cursor: pointer;
+  color: var(--text-secondary); transition: all 0.2s;
+  -webkit-app-region: no-drag;
+}
+.win-btn:hover {
+  background: var(--bg-hover); color: var(--text);
+  border-color: var(--border-light);
+}
+.win-btn:active { transform: scale(0.93); }
+.win-btn svg { width: 16px; height: 16px; }
+
+.win-btn.win-close:hover {
+  background: var(--danger-pale); color: var(--danger);
+  border-color: var(--danger);
+}
+
+.win-btn.win-power {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+.win-btn.win-power:hover {
+  background: var(--danger); color: #fff; border-color: var(--danger);
+}
+
+/* 移动端浮动窗口控制（右上角悬浮） */
+.win-controls-float {
+  display: none;
+  position: fixed; top: 12px; right: 14px; z-index: 300;
+  padding: 5px; gap: 8px;
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--card-shadow);
+}
+.win-controls-float .win-btn {
+  width: 40px; height: 40px; border-radius: 12px;
+}
+.win-controls-float .win-btn svg { width: 18px; height: 18px; }
+
 /* ========== 内容 ========== */
 .main-content {
   flex: 1; padding: 28px 32px;
@@ -2077,6 +2137,7 @@ body {
   .sidebar { display: flex; }
   .bottom-nav { display: none !important; }
   .mobile-logo { display: none !important; }
+  .win-controls-float { display: none !important; }
 }
 
 @media (max-width: 899px) {
@@ -2085,8 +2146,9 @@ body {
   .mobile-logo { display: flex; }
   .main-area { margin-left: 0; }
   .main-content { padding: 20px 18px 86px; max-width: 100%; }
-  .app-header { padding: 0 18px; }
-  .header-text h2 { display: none; }
+  /* 去掉顶部条，纯软件主体 */
+  .app-header { display: none; }
+  .win-controls-float { display: flex; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .greeting-card { flex-direction: column; gap: 16px; text-align: center; padding: 22px 18px; }
   .timer-hero { width: 210px; height: 210px; }

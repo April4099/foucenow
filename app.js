@@ -238,7 +238,7 @@
       '新的一天，从小事开始 🌟', '专注当下，稳步推进 💪',
       '今天的你也很棒，加油 ✨', '完成比完美更重要 🌱', '小步前进也是前进 🚀'
     ];
-    $('#greeting-sub').textContent = subs[new Date().getDate() % subs.length];
+    $('#greeting-sub').textContent = formatDateCN(today, true) + ' · ' + subs[new Date().getDate() % subs.length];
 
     const todaySessions = app.data.sessions.filter(s => s.date === today);
     const focusMin = todaySessions.reduce((a, s) => a + s.durationMin, 0);
@@ -2217,6 +2217,54 @@
   }
 
   /* ==========================================
+     窗口控制（✕ 关闭挂后台 / ⏻ 完全退出）
+     ========================================== */
+  function isAndroidApp() {
+    return typeof window.AppControl !== 'undefined' && window.AppControl !== null;
+  }
+
+  function winCloseToBackground() {
+    if (isAndroidApp()) {
+      window.AppControl.minimize();
+    } else if (window.electronAPI && window.electronAPI.winHide) {
+      window.electronAPI.winHide();
+      showToast('已关闭到后台，程序继续运行 ⏳');
+    } else {
+      showToast('浏览器预览模式下无需关闭', 'warning');
+    }
+  }
+
+  function winPowerOff() {
+    const ok = window.confirm('完全关闭程序？\n计时将停止，数据已自动保存。');
+    if (!ok) return;
+    if (isAndroidApp()) {
+      window.AppControl.exit();
+    } else if (window.electronAPI && window.electronAPI.quitApp) {
+      window.electronAPI.quitApp();
+    } else {
+      showToast('浏览器预览模式下无需退出', 'warning');
+    }
+  }
+
+  function bindWindowControls() {
+    document.querySelectorAll('[data-win]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const act = btn.getAttribute('data-win');
+        if (act === 'close') winCloseToBackground();
+        else if (act === 'power') winPowerOff();
+        else if (act === 'min' && window.electronAPI && window.electronAPI.winMin) window.electronAPI.winMin();
+        else if (act === 'max' && window.electronAPI && window.electronAPI.winMax) window.electronAPI.winMax();
+      });
+    });
+    // 非桌面端隐藏最小化/最大化按钮
+    if (!window.electronAPI) {
+      document.querySelectorAll('[data-win="min"], [data-win="max"]').forEach(b => {
+        b.style.display = 'none';
+      });
+    }
+  }
+
+  /* ==========================================
      启动
      ========================================== */
   function init() {
@@ -2237,6 +2285,15 @@
     initDragSystem();
     initFloatingWidget();
     bindSettingsEvents();
+    bindWindowControls();
+
+    // 显示版本号（桌面端取真实版本）
+    if (window.electronAPI && window.electronAPI.getVersion) {
+      window.electronAPI.getVersion().then(v => {
+        const el = $('#app-version');
+        if (el && v) el.textContent = 'v' + v;
+      }).catch(() => {});
+    }
 
     setInterval(() => {
       $('#header-date').textContent = formatDateCN(todayStr(), true);

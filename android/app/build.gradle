@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.focusnow.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.focusnow.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 150
+        versionName "1.5.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("keystore/focusnow.jks")
+            storePassword "focusnow2026"
+            keyAlias "focusnow"
+            keyPassword "focusnow2026"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// 构建前把网页三件套复制进 assets（单一代码来源）
+tasks.register('copyWebAssets', Copy) {
+    from("${projectDir}/../..")
+    include 'index.html', 'style.css', 'app.js'
+    into 'src/main/assets'
+}
+preBuild.dependsOn copyWebAssets
+
+dependencies {
+    // 纯系统 WebView，无第三方依赖
+}

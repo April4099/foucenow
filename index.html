@@ -117,8 +117,33 @@
               <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
             </svg>
           </button>
+          <!-- 窗口控制：✕ 关闭挂后台 / ⏻ 完全退出 -->
+          <div class="win-controls">
+            <button class="win-btn" data-win="min" title="最小化">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button class="win-btn" data-win="max" title="最大化/还原">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+            </button>
+            <button class="win-btn win-close" data-win="close" title="关闭页面，程序挂后台">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <button class="win-btn win-power" data-win="power" title="完全关闭程序">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+            </button>
+          </div>
         </div>
       </header>
+
+      <!-- 移动端浮动窗口控制（无顶栏时显示） -->
+      <div class="win-controls win-controls-float" id="win-controls-float">
+        <button class="win-btn win-close" data-win="close" title="关闭页面，程序挂后台">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <button class="win-btn win-power" data-win="power" title="完全关闭程序">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+        </button>
+      </div>
 
       <!-- 内容 -->
       <main class="main-content">
@@ -491,6 +516,30 @@
             </div>
           </div>
 
+          <!-- 程序控制 -->
+          <div class="settings-section">
+            <div class="settings-section-header">
+              <h3>🔌 程序控制</h3>
+              <span class="sub">✕ 关闭只是挂后台，⏻ 才会完全退出</span>
+            </div>
+            <div class="settings-list">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">✕ 关闭到后台</span>
+                  <span class="setting-desc">关闭页面但程序继续运行，计时不会中断</span>
+                </div>
+                <button class="btn-secondary" data-win="close">关闭到后台</button>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">⏻ 完全关闭程序</span>
+                  <span class="setting-desc">结束全部进程，计时停止，彻底退出</span>
+                </div>
+                <button class="btn-danger" data-win="power">完全退出</button>
+              </div>
+            </div>
+          </div>
+
           <!-- 软件使用须知 -->
           <div class="settings-section">
             <div class="settings-section-header">
@@ -508,12 +557,12 @@
                 <li>📌 所有数据存储在本机 localStorage，离线完全可用</li>
                 <li>🚫 无需注册登录，不关联任何账号</li>
                 <li>🌐 不需要联网，不追踪任何使用行为</li>
-                <li>💾 清除浏览器数据会同时清除本软件数据，请注意备份</li>
-                <li>🔄 所有更新由本地文件替换完成，无自动更新机制</li>
+                <li>💾 清除应用数据会同时清除本软件数据，请注意备份</li>
+                <li>🔄 联网时自动检查更新（由你确认后安装），数据永不上传</li>
               </ul>
               <div class="notice-version">
                 <span>当前版本</span>
-                <strong id="app-version">v1.4.0</strong>
+                <strong id="app-version">v1.5.0</strong>
               </div>
             </div>
           </div>
