@@ -1,0 +1,66 @@
+{
+  "name": "focusnow",
+  "productName": "此刻FocusNow",
+  "version": "1.4.0",
+  "description": "此刻 FocusNow - 专注日程管理",
+  "main": "electron-main.js",
+  "author": "FocusNow",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --publish never",
+    "release": "electron-builder --win --publish always"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/April4099/foucenow.git"
+  },
+  "build": {
+    "appId": "com.focusnow.app",
+    "productName": "此刻FocusNow",
+    "copyright": "Copyright © 2026 FocusNow",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "index.html",
+      "style.css",
+      "app.js",
+      "electron-main.js",
+      "preload.js",
+      "icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "此刻FocusNow",
+      "artifactName": "FocusNow-Setup-${version}.exe"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "April4099",
+      "repo": "foucenow"
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^26.18.0",
+    "electron-updater": "^6.8.11",
+    "sharp": "^0.35.5"
+  }
+}

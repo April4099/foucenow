@@ -1,0 +1,11 @@
+# 依赖
+node_modules/
+
+# 打包产物（安装包上传到 GitHub Releases，不进源码仓库）
+dist/
+release/
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store

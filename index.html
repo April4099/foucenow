@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0A0A0E">
+  <title>此刻 FocusNow · 专注日程管理</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏰</text></svg>">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ========== 侧边栏（桌面端） ========== -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <svg viewBox="0 0 36 36" fill="none" class="logo-icon">
+          <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="2.5" opacity="0.2"/>
+          <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="2.5"
+            stroke-dasharray="75 100.5" stroke-linecap="round" transform="rotate(-90 18 18)"/>
+          <circle cx="18" cy="18" r="3.5" fill="currentColor"/>
+          <line x1="18" y1="18" x2="18" y2="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="18" y1="18" x2="25" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1>此刻</h1>
+          <p>FocusNow</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="sidebar-item active" data-view="today">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          <span>今日</span>
+        </button>
+        <button class="sidebar-item" data-view="todos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+          <span>待办</span>
+        </button>
+        <button class="sidebar-item" data-view="schedule">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <span>日程</span>
+        </button>
+        <button class="sidebar-item" data-view="calendar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
+            <line x1="9" y1="2" x2="9" y2="6"/><line x1="15" y1="2" x2="15" y2="6"/>
+            <circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/>
+            <circle cx="16" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="18.5" r="1" fill="currentColor"/>
+            <circle cx="12" cy="18.5" r="1" fill="currentColor"/>
+          </svg>
+          <span>日历</span>
+        </button>
+        <button class="sidebar-item" data-view="focus">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span>专注</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="sidebar-settings-btn" data-view="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>我的</span>
+        </button>
+        <div class="sidebar-focus-ring">
+          <svg viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="#3A3A4A" stroke-width="6"/>
+            <circle class="side-ring-fill" cx="40" cy="40" r="34" fill="none" stroke="#FF2E7E"
+              stroke-width="6" stroke-linecap="round" stroke-dasharray="213.6" stroke-dashoffset="213.6"
+              transform="rotate(-90 40 40)"/>
+          </svg>
+          <div class="side-ring-text">
+            <span id="sidebar-focus-min">0</span>
+            <small>今日分</small>
+          </div>
+        </div>
+        <p class="sidebar-motivation" id="sidebar-motivation">专注此刻，告别拖延</p>
+      </div>
+    </aside>
+
+    <!-- ========== 主区域 ========== -->
+    <div class="main-area">
+
+      <!-- 顶栏 -->
+      <header class="app-header">
+        <div class="header-left">
+          <div class="mobile-logo">
+            <svg viewBox="0 0 36 36" fill="none" class="logo-icon">
+              <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="2.5" opacity="0.2"/>
+              <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="2.5"
+                stroke-dasharray="75 100.5" stroke-linecap="round" transform="rotate(-90 18 18)"/>
+              <circle cx="18" cy="18" r="3.5" fill="currentColor"/>
+            </svg>
+            <h1>此刻</h1>
+          </div>
+          <div class="header-text">
+            <h2 id="page-title">今日</h2>
+            <p class="header-date" id="header-date"></p>
+          </div>
+        </div>
+        <div class="header-right">
+          <button class="icon-btn" id="btn-notify" title="开启提醒通知">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- 内容 -->
+      <main class="main-content">
+
+        <!-- ========== 今日 ========== -->
+        <section id="view-today" class="view active">
+          <div class="dashboard-grid">
+            <!-- 问候卡片 -->
+            <div class="greeting-card">
+              <div class="greeting-text">
+                <h2 id="greeting-msg">早上好</h2>
+                <p class="greeting-sub" id="greeting-sub">今天也要元气满满哦</p>
+              </div>
+              <div class="greeting-stats">
+                <div class="mini-stat">
+                  <span class="mini-stat-num" id="today-focus-min">0</span>
+                  <span class="mini-stat-label">专注分钟</span>
+                </div>
+                <div class="mini-stat">
+                  <span class="mini-stat-num" id="today-done-count">0</span>
+                  <span class="mini-stat-label">完成任务</span>
+                </div>
+                <div class="mini-stat">
+                  <span class="mini-stat-num" id="today-event-count">0</span>
+                  <span class="mini-stat-label">今日日程</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 专注目标 -->
+            <div class="focus-goal-card">
+              <div class="goal-ring-wrap">
+                <svg class="goal-ring" viewBox="0 0 100 100">
+                  <circle class="goal-ring-bg" cx="50" cy="50" r="42"/>
+                  <circle class="goal-ring-fill" id="goal-ring-fill" cx="50" cy="50" r="42"/>
+                </svg>
+                <div class="goal-ring-text">
+                  <span id="goal-percent">0%</span>
+                  <small>日目标</small>
+                </div>
+              </div>
+              <div class="goal-info">
+                <h3>今日专注目标</h3>
+                <p id="goal-detail">0 / 120 分钟</p>
+                <p class="goal-tip">保持节奏，稳步前进 🌱</p>
+              </div>
+            </div>
+
+            <!-- 即将提醒 -->
+            <div class="next-reminder" id="next-reminder" style="display:none">
+              <div class="next-reminder-icon">🔔</div>
+              <div class="next-reminder-info">
+                <strong id="next-reminder-title"></strong>
+                <span id="next-reminder-time"></span>
+              </div>
+            </div>
+
+            <!-- ===== 每日打卡 ===== -->
+            <div class="daily-checkin" id="daily-checkin">
+              <div class="desk-header">
+                <h3>🌟 每日打卡</h3>
+                <div class="desk-header-actions">
+                  <span class="desk-sub" id="daily-streak">连续 0 天</span>
+                  <button class="text-btn" id="btn-add-daily">+ 添加</button>
+                </div>
+              </div>
+              <div id="daily-list" class="daily-list"></div>
+            </div>
+
+            <!-- 今日日程 -->
+            <div class="section-block">
+              <div class="section-header">
+                <h3>今日日程</h3>
+                <button class="text-btn" data-goto="schedule">查看全部 →</button>
+              </div>
+              <div id="today-events" class="today-events-list"></div>
+            </div>
+
+            <!-- 今日待办 -->
+            <div class="section-block">
+              <div class="section-header">
+                <h3>今日待办</h3>
+                <button class="text-btn" data-goto="todos">查看全部 →</button>
+              </div>
+              <div id="today-todos" class="today-todos-list"></div>
+            </div>
+
+            <!-- 激励语 -->
+            <div class="motivation-card">
+              <p id="motivation-text">完成比完美更重要，现在开始就是最好的时机。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== 待办 ========== -->
+        <section id="view-todos" class="view">
+          <div class="view-header">
+            <h2>待办事项</h2>
+            <button class="fab-add" id="btn-add-todo" title="添加待办">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="filter-bar" id="todo-filters">
+            <button class="filter-chip active" data-filter="all">全部</button>
+            <button class="filter-chip" data-filter="today">今天</button>
+            <button class="filter-chip" data-filter="upcoming">即将到来</button>
+            <button class="filter-chip" data-filter="done">已完成</button>
+          </div>
+
+          <div class="todo-summary">
+            <span>共 <strong id="todo-total">0</strong> 项</span>
+            <span>已完成 <strong id="todo-done">0</strong> 项</span>
+            <span>今日专注 <strong id="todo-focus-time">0</strong> 分钟</span>
+          </div>
+
+          <div id="todo-list" class="todo-list"></div>
+        </section>
+
+        <!-- ========== 日程 ========== -->
+        <section id="view-schedule" class="view">
+          <div class="view-header">
+            <h2>日程安排</h2>
+            <div class="header-actions">
+              <div class="drag-mode-bar">
+                <button class="drag-mode-chip active" data-drag-mode="snap">📌 吸附</button>
+                <button class="drag-mode-chip" data-drag-mode="free">🖐 自由</button>
+                <button class="drag-mode-chip" data-drag-mode="time">⏱ 定时</button>
+              </div>
+              <button class="fab-add" id="btn-add-event" title="添加日程">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="date-nav">
+            <button class="icon-btn" id="btn-prev-day">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <div class="date-nav-center">
+              <strong id="schedule-date-label"></strong>
+              <button class="text-btn" id="btn-today-jump">回到今天</button>
+            </div>
+            <button class="icon-btn" id="btn-next-day">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 日程主区域：时间轴 + 安排台侧栏 -->
+          <div class="schedule-layout">
+            <div class="timeline" id="timeline"></div>
+
+            <!-- ===== 安排台（日程右侧） ===== -->
+            <aside class="arrange-desk arrange-side" id="arrange-desk">
+              <div class="desk-header">
+                <h3>📋 安排台</h3>
+                <span class="desk-sub" id="desk-count">0 项</span>
+              </div>
+              <div class="desk-pool">
+                <div class="desk-pool-title">
+                  <span>待安排</span>
+                  <small>未截止事项</small>
+                </div>
+                <div id="desk-pending" class="desk-items"></div>
+              </div>
+              <div class="desk-arranged">
+                <div class="desk-pool-title">
+                  <span>今日已排</span>
+                  <small>按时间</small>
+                </div>
+                <div id="desk-arranged-list" class="desk-items"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ========== 日历 ========== -->
+        <section id="view-calendar" class="view">
+          <div class="view-header">
+            <h2>日历</h2>
+          </div>
+
+          <!-- 月份导航 -->
+          <div class="cal-nav">
+            <button class="icon-btn" id="cal-prev">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <h3 id="cal-month-label">2026年11月</h3>
+            <button class="icon-btn" id="cal-next">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 分类筛选 -->
+          <div class="filter-bar" id="cal-filters">
+            <button class="filter-chip active" data-cat="all">全部</button>
+            <button class="filter-chip" data-cat="设计">设计</button>
+            <button class="filter-chip" data-cat="绘制">绘制</button>
+            <button class="filter-chip" data-cat="工作">工作</button>
+            <button class="filter-chip" data-cat="学习">学习</button>
+            <button class="filter-chip" data-cat="生活">生活</button>
+            <button class="filter-chip" data-cat="健康">健康</button>
+            <button class="filter-chip" data-cat="其他">其他</button>
+          </div>
+
+          <!-- 日历网格 -->
+          <div class="calendar-card">
+            <div class="calendar-weekdays">
+              <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </div>
+
+          <!-- 热力图图例 -->
+          <div class="heat-legend">
+            <span class="heat-label">专注少</span>
+            <div class="heat-swatch heat-0"></div>
+            <div class="heat-swatch heat-1"></div>
+            <div class="heat-swatch heat-2"></div>
+            <div class="heat-swatch heat-3"></div>
+            <div class="heat-swatch heat-4"></div>
+            <span class="heat-label">专注多</span>
+          </div>
+
+          <!-- 选中日详情 -->
+          <div class="cal-day-detail" id="cal-day-detail">
+            <h3 id="cal-day-title">选择日期查看详情</h3>
+            <div class="day-stats-row" id="day-stats-row"></div>
+            <div class="day-detail-lists">
+              <div class="day-section">
+                <h4>📅 日程</h4>
+                <div id="cal-day-events"></div>
+              </div>
+              <div class="day-section">
+                <h4>✅ 任务</h4>
+                <div id="cal-day-todos"></div>
+              </div>
+              <div class="day-section">
+                <h4>⏱ 专注记录</h4>
+                <div id="cal-day-sessions"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 月度统计 -->
+          <div class="cal-month-stats">
+            <h3>本月统计</h3>
+            <div class="month-stats-grid">
+              <div class="month-stat-card">
+                <div class="ms-num" id="ms-focus-total">0</div>
+                <div class="ms-label">总专注(分)</div>
+              </div>
+              <div class="month-stat-card">
+                <div class="ms-num" id="ms-pomodoro">0</div>
+                <div class="ms-label">番茄数</div>
+              </div>
+              <div class="month-stat-card">
+                <div class="ms-num" id="ms-events">0</div>
+                <div class="ms-label">日程数</div>
+              </div>
+              <div class="month-stat-card">
+                <div class="ms-num" id="ms-tasks">0</div>
+                <div class="ms-label">完成任务</div>
+              </div>
+              <div class="month-stat-card">
+                <div class="ms-num" id="ms-avg">0</div>
+                <div class="ms-label">日均专注</div>
+              </div>
+              <div class="month-stat-card">
+                <div class="ms-num" id="ms-best">0</div>
+                <div class="ms-label">最佳一天(分)</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== 我的 / 设置 ========== -->
+        <section id="view-settings" class="view">
+          <div class="view-header">
+            <h2>我的</h2>
+          </div>
+
+          <!-- 皮肤主题 -->
+          <div class="settings-section">
+            <div class="settings-section-header">
+              <h3>🎨 皮肤主题</h3>
+              <span class="sub">选择你喜欢的配色风格</span>
+            </div>
+            <div class="theme-bar" id="theme-bar"></div>
+          </div>
+
+          <!-- 基本设置 -->
+          <div class="settings-section">
+            <div class="settings-section-header">
+              <h3>⚙️ 基本设置</h3>
+            </div>
+            <div class="settings-list">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">🔊 提示音效</span>
+                  <span class="setting-desc">完成任务和计时结束时播放音效</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-sound" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">🔔 系统通知</span>
+                  <span class="setting-desc">日程到期时发送系统通知提醒</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-notify">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">📊 每日专注目标</span>
+                  <span class="setting-desc">每天的专注时间目标（分钟）</span>
+                </div>
+                <div class="setting-input-group">
+                  <input type="number" id="setting-daily-goal" value="120" min="10" max="999" step="10">
+                  <span class="setting-unit">分钟</span>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">🍅 番茄钟 · 专注</span>
+                  <span class="setting-desc">单次专注时长</span>
+                </div>
+                <div class="setting-input-group">
+                  <input type="number" id="setting-pomo-work" value="25" min="5" max="120" step="5">
+                  <span class="setting-unit">分钟</span>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">☕ 番茄钟 · 短休息</span>
+                  <span class="setting-desc">每次专注之间的短休息时长</span>
+                </div>
+                <div class="setting-input-group">
+                  <input type="number" id="setting-pomo-short" value="5" min="1" max="30" step="1">
+                  <span class="setting-unit">分钟</span>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">🌴 番茄钟 · 长休息</span>
+                  <span class="setting-desc">每完成一轮后的长休息时长</span>
+                </div>
+                <div class="setting-input-group">
+                  <input type="number" id="setting-pomo-long" value="15" min="5" max="60" step="5">
+                  <span class="setting-unit">分钟</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 软件使用须知 -->
+          <div class="settings-section">
+            <div class="settings-section-header">
+              <h3>📋 软件使用须知</h3>
+            </div>
+            <div class="notice-card">
+              <div class="notice-highlight">
+                <div class="notice-icon">🔒</div>
+                <div>
+                  <strong>隐私承诺</strong>
+                  <p>本软件<strong>不读取、不收集、不上传</strong>任何个人信息。所有数据（任务、日程、专注记录、设置）仅保存在<strong>本机浏览器</strong>中，不会发送到任何服务器。</p>
+                </div>
+              </div>
+              <ul class="notice-list">
+                <li>📌 所有数据存储在本机 localStorage，离线完全可用</li>
+                <li>🚫 无需注册登录，不关联任何账号</li>
+                <li>🌐 不需要联网，不追踪任何使用行为</li>
+                <li>💾 清除浏览器数据会同时清除本软件数据，请注意备份</li>
+                <li>🔄 所有更新由本地文件替换完成，无自动更新机制</li>
+              </ul>
+              <div class="notice-version">
+                <span>当前版本</span>
+                <strong id="app-version">v1.4.0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- 数据管理 -->
+          <div class="settings-section">
+            <div class="settings-section-header">
+              <h3>💾 数据管理</h3>
+            </div>
+            <div class="settings-list">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">📤 导出数据</span>
+                  <span class="setting-desc">将所有任务、日程、记录导出为 JSON 备份文件</span>
+                </div>
+                <button class="btn-secondary" id="btn-export-data">导出</button>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">📥 导入数据</span>
+                  <span class="setting-desc">从备份文件恢复数据（将覆盖当前数据）</span>
+                </div>
+                <button class="btn-secondary" id="btn-import-data">导入</button>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">🗑️ 清除所有数据</span>
+                  <span class="setting-desc">删除全部任务、日程和记录，不可恢复</span>
+                </div>
+                <button class="btn-danger" id="btn-clear-data">清除</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== 专注 ========== -->
+        <section id="view-focus" class="view">
+          <div class="view-header">
+            <h2>专注计时</h2>
+            <div class="header-actions">
+              <button class="float-widget-toggle" id="btn-float-toggle" title="显示/隐藏悬浮专注钟">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="3" x2="12" y2="6"/>
+                </svg>
+                <span>悬浮钟</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="timer-modes" id="timer-modes">
+            <button class="mode-chip active" data-mode="pomodoro">🍅 番茄钟</button>
+            <button class="mode-chip" data-mode="custom">⏱ 自定义</button>
+            <button class="mode-chip" data-mode="stopwatch">▶ 秒表</button>
+          </div>
+
+          <div class="phase-indicator" id="phase-indicator">
+            <button class="phase-chip active" data-phase="work">专注</button>
+            <button class="phase-chip" data-phase="shortBreak">短休息</button>
+            <button class="phase-chip" data-phase="longBreak">长休息</button>
+          </div>
+
+          <div class="timer-hero">
+            <svg class="timer-ring" viewBox="0 0 220 220">
+              <circle class="timer-ring-bg" cx="110" cy="110" r="100"/>
+              <circle class="timer-ring-fill" id="timer-ring-fill" cx="110" cy="110" r="100"/>
+            </svg>
+            <div class="timer-center">
+              <div class="timer-digits" id="timer-display">25:00</div>
+              <div class="timer-phase-label" id="timer-phase-label">准备开始</div>
+            </div>
+          </div>
+
+          <div class="timer-controls">
+            <button class="ctrl-btn ctrl-secondary" id="btn-timer-reset" title="重置">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+            </button>
+            <button class="ctrl-btn ctrl-primary" id="btn-timer-toggle">
+              <svg viewBox="0 0 24 24" fill="currentColor" id="btn-timer-icon">
+                <polygon points="6 3 20 12 6 21 6 3"/>
+              </svg>
+            </button>
+            <button class="ctrl-btn ctrl-secondary" id="btn-timer-skip" title="跳过">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="custom-duration" id="custom-duration" style="display:none">
+            <label>时长（分钟）</label>
+            <div class="duration-btns">
+              <button class="dur-btn" data-min="10">10</button>
+              <button class="dur-btn" data-min="15">15</button>
+              <button class="dur-btn active" data-min="25">25</button>
+              <button class="dur-btn" data-min="30">30</button>
+              <button class="dur-btn" data-min="45">45</button>
+              <button class="dur-btn" data-min="60">60</button>
+            </div>
+          </div>
+
+          <div class="focus-task-card" id="focus-task-card">
+            <div class="focus-task-label">当前专注任务</div>
+            <div class="focus-task-select" id="focus-task-select">
+              <select id="focus-todo-select">
+                <option value="">— 不关联任务 —</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="focus-stats-grid">
+            <div class="fstat-card">
+              <div class="fstat-num" id="fstat-today">0</div>
+              <div class="fstat-label">今日专注(分)</div>
+            </div>
+            <div class="fstat-card">
+              <div class="fstat-num" id="fstat-pomodoro">0</div>
+              <div class="fstat-label">番茄数</div>
+            </div>
+            <div class="fstat-card">
+              <div class="fstat-num" id="fstat-sessions">0</div>
+              <div class="fstat-label">专注次数</div>
+            </div>
+            <div class="fstat-card">
+              <div class="fstat-num" id="fstat-streak">0</div>
+              <div class="fstat-label">连续天数</div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- ========== 底部导航（移动端） ========== -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" data-view="today">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        <span>今日</span>
+      </button>
+      <button class="nav-item" data-view="todos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        <span>待办</span>
+      </button>
+      <button class="nav-item" data-view="schedule">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span>日程</span>
+      </button>
+      <button class="nav-item" data-view="calendar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
+          <circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/>
+          <circle cx="16" cy="15" r="1" fill="currentColor"/><circle cx="8" cy="18.5" r="1" fill="currentColor"/>
+          <circle cx="12" cy="18.5" r="1" fill="currentColor"/>
+        </svg>
+        <span>日历</span>
+      </button>
+      <button class="nav-item" data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>我的</span>
+      </button>
+      <button class="nav-item" data-view="focus">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span>专注</span>
+      </button>
+    </nav>
+
+    <!-- ========== 弹窗：添加待办 ========== -->
+    <div class="modal-overlay" id="modal-todo">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>添加待办</h3>
+          <button class="icon-btn modal-close" data-close="modal-todo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <form id="form-todo" class="modal-body">
+          <div class="form-group">
+            <label for="todo-title">任务名称 *</label>
+            <input type="text" id="todo-title" placeholder="要做什么？" required maxlength="100" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="todo-desc">描述（可选）</label>
+            <textarea id="todo-desc" rows="2" placeholder="补充说明..." maxlength="500"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="todo-priority">优先级</label>
+              <select id="todo-priority">
+                <option value="medium">普通</option>
+                <option value="high">高</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="todo-category">分类</label>
+              <select id="todo-category">
+                <option value="设计">设计</option>
+                <option value="绘制">绘制</option>
+                <option value="工作">工作</option>
+                <option value="学习">学习</option>
+                <option value="生活">生活</option>
+                <option value="健康">健康</option>
+                <option value="其他">其他</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="todo-due">截止日期</label>
+              <input type="date" id="todo-due">
+            </div>
+            <div class="form-group">
+              <label for="todo-est">预估时长(分)</label>
+              <input type="number" id="todo-est" min="5" max="600" step="5" value="25">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary btn-full">添加任务</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========== 弹窗：添加日程 ========== -->
+    <div class="modal-overlay" id="modal-event">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>添加日程</h3>
+          <button class="icon-btn modal-close" data-close="modal-event">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <form id="form-event" class="modal-body">
+          <div class="form-group">
+            <label for="event-title">日程名称 *</label>
+            <input type="text" id="event-title" placeholder="什么事？" required maxlength="100" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="event-date">日期</label>
+              <input type="date" id="event-date" required>
+            </div>
+            <div class="form-group">
+              <label for="event-category">分类</label>
+              <select id="event-category">
+                <option value="设计">设计</option>
+                <option value="绘制">绘制</option>
+                <option value="工作">工作</option>
+                <option value="学习">学习</option>
+                <option value="生活">生活</option>
+                <option value="健康">健康</option>
+                <option value="其他">其他</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="event-start">开始时间</label>
+              <input type="time" id="event-start" required>
+            </div>
+            <div class="form-group">
+              <label for="event-end">结束时间</label>
+              <input type="time" id="event-end">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="event-repeat">重复</label>
+              <select id="event-repeat">
+                <option value="none">不重复</option>
+                <option value="daily">每天</option>
+                <option value="weekly">每周</option>
+                <option value="monthly">每月</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="event-reminder">提醒</label>
+              <select id="event-reminder">
+                <option value="0">准时提醒</option>
+                <option value="5">提前 5 分钟</option>
+                <option value="15" selected>提前 15 分钟</option>
+                <option value="30">提前 30 分钟</option>
+                <option value="60">提前 1 小时</option>
+                <option value="-1">不提醒</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="event-notes">备注（可选）</label>
+            <textarea id="event-notes" rows="2" placeholder="地点、备注..." maxlength="500"></textarea>
+          </div>
+          <button type="submit" class="btn-primary btn-full">添加日程</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========== 弹窗：编辑待办 ========== -->
+    <div class="modal-overlay" id="modal-edit-todo">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>编辑待办</h3>
+          <button class="icon-btn modal-close" data-close="modal-edit-todo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <form id="form-edit-todo" class="modal-body">
+          <input type="hidden" id="edit-todo-id">
+          <div class="form-group">
+            <label for="edit-todo-title">任务名称 *</label>
+            <input type="text" id="edit-todo-title" required maxlength="100">
+          </div>
+          <div class="form-group">
+            <label for="edit-todo-desc">描述</label>
+            <textarea id="edit-todo-desc" rows="2" maxlength="500"></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-todo-priority">优先级</label>
+              <select id="edit-todo-priority">
+                <option value="high">高</option>
+                <option value="medium">普通</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="edit-todo-category">分类</label>
+              <select id="edit-todo-category">
+                <option value="设计">设计</option>
+                <option value="绘制">绘制</option>
+                <option value="工作">工作</option>
+                <option value="学习">学习</option>
+                <option value="生活">生活</option>
+                <option value="健康">健康</option>
+                <option value="其他">其他</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="edit-todo-due">截止日期</label>
+              <input type="date" id="edit-todo-due">
+            </div>
+            <div class="form-group">
+              <label for="edit-todo-est">预估时长(分)</label>
+              <input type="number" id="edit-todo-est" min="5" max="600" step="5">
+            </div>
+          </div>
+          <button type="submit" class="btn-primary btn-full">保存修改</button>
+          <button type="button" class="btn-danger btn-full" id="btn-delete-todo">删除任务</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== 每日打卡添加弹窗 ===== -->
+    <div class="modal-overlay" id="modal-daily">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h3>🌟 新增每日打卡</h3>
+          <button class="icon-btn modal-close" data-close="modal-daily">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>打卡项目</label>
+            <input type="text" id="daily-title" placeholder="例如：每日速写30分钟" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label>分类</label>
+            <select id="daily-category">
+              <option value="设计">设计</option>
+              <option value="绘制">绘制</option>
+              <option value="学习">学习</option>
+              <option value="工作">工作</option>
+              <option value="生活">生活</option>
+              <option value="健康">健康</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>图标</label>
+            <div class="emoji-picker" id="daily-emoji-picker">
+              <button class="emoji-opt active" data-emoji="✏️">✏️</button>
+              <button class="emoji-opt" data-emoji="🎨">🎨</button>
+              <button class="emoji-opt" data-emoji="📐">📐</button>
+              <button class="emoji-opt" data-emoji="📖">📖</button>
+              <button class="emoji-opt" data-emoji="💪">💪</button>
+              <button class="emoji-opt" data-emoji="🧘">🧘</button>
+              <button class="emoji-opt" data-emoji="🎵">🎵</button>
+              <button class="emoji-opt" data-emoji="✍️">✍️</button>
+              <button class="emoji-opt" data-emoji="🏃">🏃</button>
+              <button class="emoji-opt" data-emoji="💡">💡</button>
+            </div>
+          </div>
+          <button class="btn-primary btn-full" id="btn-daily-save">✓ 添加打卡项</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 快速安排弹窗 ===== -->
+    <div class="modal-overlay" id="modal-arrange">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h3>⏰ 安排到今天</h3>
+          <button class="icon-btn modal-close" data-close="modal-arrange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="arrange-item-preview" id="arrange-preview"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>开始时间</label>
+              <input type="time" id="arrange-start" value="09:00">
+            </div>
+            <div class="form-group">
+              <label>结束时间</label>
+              <input type="time" id="arrange-end" value="10:00">
+            </div>
+          </div>
+          <div class="arrange-quick-times">
+            <span class="sub">快速选择</span>
+            <div class="quick-time-chips">
+              <button class="quick-time-chip" data-hours="1">1小时</button>
+              <button class="quick-time-chip" data-hours="2">2小时</button>
+              <button class="quick-time-chip" data-hours="0.5">30分钟</button>
+              <button class="quick-time-chip" data-hours="1.5">1.5小时</button>
+            </div>
+          </div>
+          <button class="btn-primary btn-full" id="btn-arrange-confirm">📅 安排到今天</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ========== 悬浮专注钟 ========== -->
+    <div class="floating-timer" id="floating-timer" style="display:none">
+      <!-- 最小化小球 -->
+      <div class="floating-ball" id="floating-ball">
+        <svg viewBox="0 0 72 72">
+          <circle class="ball-ring-bg" cx="36" cy="36" r="32"/>
+          <circle class="ball-ring-fill" id="ball-ring-fill" cx="36" cy="36" r="32"
+            stroke-dasharray="201" stroke-dashoffset="201"/>
+        </svg>
+        <span class="ball-time" id="ball-time">25:00</span>
+        <span class="ball-label" id="ball-label">专注</span>
+      </div>
+      <!-- 展开面板 -->
+      <div class="floating-panel" id="floating-panel">
+        <div class="floating-header" id="floating-header">
+          <div class="floating-header-title">⏱ 专注钟</div>
+          <div class="floating-header-btns">
+            <button id="float-minimize" title="最小化">─</button>
+            <button id="float-close" title="隐藏">×</button>
+          </div>
+        </div>
+        <div class="floating-body">
+          <div class="floating-time-display" id="float-display">25:00</div>
+          <div class="floating-phase" id="float-phase">准备开始</div>
+          <div class="floating-controls">
+            <button class="fc-side" id="float-reset" title="重置">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+            </button>
+            <button class="fc-play" id="float-toggle">
+              <svg viewBox="0 0 24 24" fill="currentColor" id="float-icon">
+                <polygon points="6 3 20 12 6 21 6 3"/>
+              </svg>
+            </button>
+            <button class="fc-side" id="float-skip" title="跳过">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="floating-size-ctrl">
+          <span>大小</span>
+          <button id="float-size-s">S</button>
+          <button id="float-size-m" style="background:var(--primary-pale);color:var(--primary);border-color:var(--primary)">M</button>
+          <button id="float-size-l">L</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
