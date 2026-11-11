@@ -107,6 +107,44 @@ function createTray() {
   });
 }
 
+/* ========== 独立悬浮专注钟（可离开主窗口，默认置顶） ========== */
+let floatWindow = null;
+
+function createFloatWindow() {
+  if (floatWindow) { floatWindow.show(); floatWindow.focus(); return; }
+  floatWindow = new BrowserWindow({
+    width: 240, height: 300,
+    minWidth: 200, minHeight: 260,
+    frame: false, transparent: true, skipTaskbar: true,
+    alwaysOnTop: true, resizable: true,
+    backgroundColor: '#00000000',
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+  floatWindow.loadFile('float.html');
+  floatWindow.once('ready-to-show', () => floatWindow.show());
+  floatWindow.on('closed', () => {
+    floatWindow = null;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-window-state', false);
+  });
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-window-state', true);
+}
+
+/* 悬浮钟 IPC 中继：主窗口 <-> 悬浮窗 双向同步计时状态与控制指令 */
+ipcMain.handle('open-float', () => { createFloatWindow(); return { status: 'opened' }; });
+ipcMain.handle('close-float', () => {
+  if (floatWindow) { floatWindow.close(); floatWindow = null; }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-window-state', false);
+  return { status: 'closed' };
+});
+ipcMain.on('float-state', (e, state) => { if (floatWindow) floatWindow.webContents.send('float-state', state); });
+ipcMain.on('float-cmd', (e, cmd) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-cmd', cmd); });
+ipcMain.on('float-request-state', (e) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-request-state'); });
+
 /* ========== 更新检查 ========== */
 function checkForUpdates() {
   // 开发模式不检查更新

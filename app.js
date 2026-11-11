@@ -503,12 +503,9 @@
       hourEvents.forEach(ev => {
         const dur = ev.end ? minutesFromHM(ev.end) - minutesFromHM(ev.start) : 60;
         const h2 = Math.max(30, (dur / 60) * 56 - 4);
-        const evCat = ev.category || '其他';
-        const evHigh = ev.reminder >= 0;
-        const repeatLabel = ({ daily: '每天', weekly: '每周', monthly: '每月' })[ev.repeat] || '';
-        html += `<div class="timeline-event${evHigh ? ' event-high' : ''}" data-event-id="${ev.id}" data-cat="${evCat}" style="height:${h2}px;background:var(--tag-bg-${evCat}, var(--accent-pale));border-left-color:var(--tag-fg-${evCat}, var(--accent));">
+        html += `<div class="timeline-event${ev.reminder >= 0 ? ' event-high' : ''}" data-event-id="${ev.id}" style="height:${h2}px">
           <strong>${escapeHtml(ev.title)}</strong>
-          <span>${evHigh ? '🔔 ' : ''}${ev.start}${ev.end ? '-' + ev.end : ''}${repeatLabel ? ' · ' + repeatLabel : ''}</span>
+          <span>${ev.start}${ev.end ? '-' + ev.end : ''}${ev.repeat !== 'none' ? ' · ' + ({ daily: '每天', weekly: '每周', monthly: '每月' })[ev.repeat] : ''}</span>
         </div>`;
       });
       html += '</div></div>';
@@ -550,44 +547,17 @@
      今日安排台 —— 日程 × 待办 绑定系统
      ========================================== */
 
-  /** 获取所有未截止、未完成的事项（待安排池） */
-  function getPendingItems() {
-    const today = todayStr();
-    const now = nowHM();
+  /** 获取某天待安排的事项（只含未完成、且当天尚未被安排的任务） */
+  function getPendingItems(dateStr) {
     const items = [];
 
-    // 未截止的日程（今天还没过去的 + 未来的）
-    app.data.events.forEach(ev => {
-      // 跳过已经排到今天且已过时间的
-      const isToday = ev.date === today || (ev.repeat !== 'none' && ev.date <= today);
-      const isFuture = ev.date > today;
-      const isTodayUpcoming = isToday && (!ev.end || ev.end >= now);
-      if (isFuture || isTodayUpcoming) {
-        // 检查是否已排到今天
-        const arrangedToday = app.data.events.find(e =>
-          e.todoId && e.todoId === ev.id && e.date === today
-        );
-        items.push({
-          type: 'event',
-          id: ev.id,
-          title: ev.title,
-          category: ev.category,
-          time: ev.start + (ev.end ? '-' + ev.end : ''),
-          date: ev.date,
-          arranged: !!arrangedToday,
-          data: ev
-        });
-      }
-    });
-
-    // 未完成的待办（未过期的）
+    // 未完成的待办（未过期、且当天尚未排成日程）
     app.data.todos.forEach(t => {
       if (t.completed) return;
-      const isOverdue = t.due && t.due < today;
+      const isOverdue = t.due && t.due < dateStr;
       if (isOverdue) return; // 过期待办不进安排台
 
-      // 检查是否已排到今天
-      const arrangedEvent = app.data.events.find(e => e.todoId === t.id && e.date === today);
+      const arrangedEvent = app.data.events.find(e => e.todoId === t.id && e.date === dateStr);
       items.push({
         type: 'todo',
         id: t.id,
@@ -605,11 +575,10 @@
     return items;
   }
 
-  /** 获取今天已排的事项（按时间排序） */
-  function getArrangedItems() {
-    const today = todayStr();
+  /** 获取某天已排的事项（按时间排序） */
+  function getArrangedItems(dateStr) {
     return app.data.events
-      .filter(e => e.date === today)
+      .filter(e => e.date === dateStr)
       .sort((a, b) => a.start.localeCompare(b.start))
       .map(ev => {
         const linkedTodo = ev.todoId ? app.data.todos.find(t => t.id === ev.todoId) : null;
@@ -626,11 +595,15 @@
       });
   }
 
-  /** 渲染安排台 */
-  function renderArrangeDesk() {
-    const pending = getPendingItems();
-    const arranged = getArrangedItems();
+  /** 渲染安排台（与日程表共用 scheduleDate） */
+  function renderArrangeDesk(dateStr = app.ui.scheduleDate) {
+    const pending = getPendingItems(dateStr);
+    const arranged = getArrangedItems(dateStr);
     const unarranged = pending.filter(p => !p.arranged);
+
+    // 动态标题：已排日程（显示当前绑定日期）
+    const arrangedTitle = $('#desk-arranged-title');
+    if (arrangedTitle) arrangedTitle.textContent = formatDateCN(dateStr, true) + ' 已排';
 
     // 计数
     const countEl = $('#desk-count');
@@ -702,7 +675,11 @@
 
   function openArrangeModal(type, id) {
     arrangeTarget = { type, id };
-    const today = todayStr();
+    const targetDate = app.ui.scheduleDate;
+    const dateLabel = formatDateCN(targetDate, true);
+    $('#arrange-modal-title').textContent = '⏰ 安排到 ' + dateLabel;
+    const confirmBtn = $('#btn-arrange-confirm');
+    if (confirmBtn) confirmBtn.textContent = '📅 安排到 ' + dateLabel;
 
     // 预览信息
     const preview = $('#arrange-preview');
@@ -715,11 +692,12 @@
           <div class="preview-title">${escapeHtml(t.title)}</div>
           <div class="preview-meta">${catBadge(t.category)} 预估 ${t.estimatedMin || 25} 分钟</div>
         </div>`;
-      // 根据预估时长设置默认时间
+      // 根据预估时长设置默认时间（未来日期默认上午，今天默认从当前时段起）
       const dur = t.estimatedMin || 60;
+      const isToday = targetDate === todayStr();
       const now = new Date();
-      const startH = Math.max(8, now.getHours());
-      const startM = now.getMinutes() > 30 ? 30 : 0;
+      const startH = isToday ? Math.max(8, now.getHours()) : 9;
+      const startM = isToday ? (now.getMinutes() > 30 ? 30 : 0) : 0;
       $('#arrange-start').value = `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`;
       const endTotal = startH * 60 + startM + dur;
       $('#arrange-end').value = `${String(Math.floor(endTotal / 60)).padStart(2, '0')}:${String(endTotal % 60).padStart(2, '0')}`;
@@ -746,30 +724,30 @@
     const end = $('#arrange-end').value;
     if (!start) { showToast('请选择开始时间', 'warning'); return; }
 
-    const today = todayStr();
+    const targetDate = app.ui.scheduleDate;
 
     if (arrangeTarget.type === 'todo') {
       const t = app.data.todos.find(x => x.id === arrangeTarget.id);
       if (!t) return;
       addEvent({
-        title: t.title, date: today, start, end,
+        title: t.title, date: targetDate, start, end,
         repeat: 'none', reminder: 10,
         notes: `从待办安排 · 预估${t.estimatedMin || 25}分钟`,
         category: t.category,
         todoId: t.id
       });
-      showToast(`「${t.title}」已安排到 ${start} 🔗`, 'success');
+      showToast(`「${t.title}」已安排到 ${targetDate} ${start} 🔗`, 'success');
     } else {
-      // 日程重新排到今天
+      // 日程重新排到目标日期
       const ev = app.data.events.find(x => x.id === arrangeTarget.id);
       if (!ev) return;
       addEvent({
-        title: ev.title, date: today, start, end: end || ev.end,
+        title: ev.title, date: targetDate, start, end: end || ev.end,
         repeat: 'none', reminder: ev.reminder,
         notes: ev.notes, category: ev.category,
         todoId: ev.todoId
       });
-      showToast(`「${ev.title}」已安排到今天 ${start} 📅`, 'success');
+      showToast(`「${ev.title}」已安排到 ${targetDate} ${start} 📅`, 'success');
     }
 
     closeModal('modal-arrange');
@@ -1310,6 +1288,9 @@
 
     // 同步悬浮钟
     if (typeof updateFloatingDisplay === 'function') updateFloatingDisplay();
+
+    // 向独立置顶悬浮窗广播计时状态
+    broadcastFloatState();
 
     document.title = t.running && t.mode !== 'stopwatch'
       ? formatSecs(t.remaining) + ' · 此刻 FocusNow'
@@ -2066,6 +2047,7 @@
     posX: null,
     posY: null
   };
+  let floatWindowOpen = false; // 独立置顶悬浮窗是否打开
 
   function initFloatingWidget() {
     const widget = $('#floating-timer');
@@ -2089,21 +2071,51 @@
       showToast('专注钟已隐藏', 'info');
     });
 
-    // 悬浮钟开关按钮
+    // 悬浮钟开关按钮：打包环境下优先打开「可离开软件的独立置顶悬浮窗」，
+    // 浏览器预览环境回退到内置小组件
     const toggleBtn = $('#btn-float-toggle');
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
-        if (floatState.hidden) {
-          floatState.hidden = false;
-          widget.style.display = '';
-          showToast('悬浮专注钟已开启', 'success');
+        if (window.electronAPI && window.electronAPI.openFloat) {
+          if (floatWindowOpen) window.electronAPI.closeFloat();
+          else window.electronAPI.openFloat();
         } else {
-          floatState.hidden = true;
-          widget.style.display = 'none';
-          showToast('悬浮专注钟已隐藏', 'info');
+          if (floatState.hidden) {
+            floatState.hidden = false;
+            widget.style.display = '';
+            showToast('悬浮专注钟已开启', 'success');
+          } else {
+            floatState.hidden = true;
+            widget.style.display = 'none';
+            showToast('悬浮专注钟已隐藏', 'info');
+          }
+          updateFloatToggleBtn();
         }
-        updateFloatToggleBtn();
       });
+    }
+
+    // 独立悬浮窗状态回调（开/关）— 同步按钮高亮
+    if (window.electronAPI && window.electronAPI.onFloatWindowState) {
+      window.electronAPI.onFloatWindowState((open) => {
+        floatWindowOpen = open;
+        const btn = $('#btn-float-toggle');
+        if (btn) btn.classList.toggle('active', open);
+      });
+    }
+
+    // 来自独立悬浮窗的控制指令 → 执行计时控制并回传状态
+    if (window.electronAPI && window.electronAPI.onFloatCmd) {
+      window.electronAPI.onFloatCmd((type) => {
+        if (type === 'toggle') toggleTimer();
+        else if (type === 'reset') resetTimer();
+        else if (type === 'skip') skipPhase();
+        broadcastFloatState();
+      });
+    }
+
+    // 独立悬浮窗请求初始状态
+    if (window.electronAPI && window.electronAPI.onFloatRequestState) {
+      window.electronAPI.onFloatRequestState(() => broadcastFloatState());
     }
 
     // 计时控制
@@ -2242,6 +2254,29 @@
       icon.innerHTML = t.running
         ? '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>'
         : '<polygon points="6 3 20 12 6 21 6 3"/>';
+    }
+  }
+
+  /* 构建供独立悬浮窗使用的计时状态快照 */
+  function buildFloatState() {
+    const t = app.timer;
+    const labels = { work: '专注中', shortBreak: '短休息', longBreak: '长休息', custom: '自定义', stopwatch: '秒表' };
+    return {
+      remaining: t.remaining,
+      total: t.total,
+      phase: t.phase,
+      running: t.running,
+      mode: t.mode,
+      display: formatSecs(t.remaining),
+      phaseText: t.running ? (labels[t.phase] || '进行中') : (t.remaining < t.total ? '已暂停' : '准备开始'),
+      label: (labels[t.phase] || '专注').slice(0, 2)
+    };
+  }
+
+  /* 把计时状态广播给独立悬浮窗（经由主进程中继） */
+  function broadcastFloatState() {
+    if (window.electronAPI && window.electronAPI.sendFloatState) {
+      window.electronAPI.sendFloatState(buildFloatState());
     }
   }
 

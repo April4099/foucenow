@@ -18,5 +18,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   winMin: () => ipcRenderer.invoke('win-min'),
   winMax: () => ipcRenderer.invoke('win-max'),
   winHide: () => ipcRenderer.invoke('win-hide'),
-  quitApp: () => ipcRenderer.invoke('app-quit')
+  quitApp: () => ipcRenderer.invoke('app-quit'),
+  // 悬浮专注钟（独立置顶窗口）相关
+  onFloatState: (callback) => ipcRenderer.on('float-state', (event, state) => callback(state)),
+  sendFloatState: (state) => ipcRenderer.send('float-state', state),
+  onFloatCmd: (callback) => ipcRenderer.on('float-cmd', (event, type) => callback(type)),
+  sendFloatCmd: (type) => ipcRenderer.send('float-cmd', type),
+  onFloatRequestState: (callback) => ipcRenderer.on('float-request-state', () => callback()),
+  sendFloatRequestState: () => ipcRenderer.send('float-request-state'),
+  openFloat: () => ipcRenderer.invoke('open-float'),
+  closeFloat: () => ipcRenderer.invoke('close-float'),
+  onFloatWindowState: (callback) => ipcRenderer.on('float-window-state', (event, open) => callback(open))
 });

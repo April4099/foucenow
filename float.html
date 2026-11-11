@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>专注钟</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: transparent; overflow: hidden;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    -webkit-app-region: drag; user-select: none;
+  }
+  #app {
+    width: 240px; padding: 16px 16px 14px; margin: 6px;
+    background: rgba(22, 22, 30, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 22px;
+    box-shadow: 0 14px 44px rgba(0, 0, 0, 0.5);
+    color: #fff;
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+  .fl-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px; -webkit-app-region: drag;
+  }
+  .fl-title {
+    font-size: 0.78rem; color: rgba(255, 255, 255, 0.6); font-weight: 600;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .fl-dot { width: 8px; height: 8px; border-radius: 50%; background: #FF2E7E; box-shadow: 0 0 8px #FF2E7E; transition: background 0.3s; }
+  .fl-close {
+    -webkit-app-region: no-drag; width: 22px; height: 22px; border: none; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.7);
+    cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .fl-close:hover { background: rgba(255, 255, 255, 0.18); }
+  .fl-ring-wrap { position: relative; width: 150px; height: 150px; margin: 2px auto 10px; }
+  .fl-ring-bg { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 8; }
+  .fl-ring-fill {
+    fill: none; stroke: #FF2E7E; stroke-width: 8; stroke-linecap: round;
+    transform: rotate(-90deg); transform-origin: center;
+    transition: stroke-dashoffset 0.4s linear, stroke 0.3s;
+  }
+  .fl-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .fl-time { font-size: 2.05rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+  .fl-phase { font-size: 0.72rem; color: rgba(255, 255, 255, 0.6); margin-top: 3px; }
+  .fl-controls { display: flex; align-items: center; justify-content: center; gap: 14px; -webkit-app-region: no-drag; }
+  .fl-btn { border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .fl-btn.side { width: 40px; height: 40px; background: rgba(255, 255, 255, 0.1); color: #fff; }
+  .fl-btn.side:hover { background: rgba(255, 255, 255, 0.2); }
+  .fl-btn.play { width: 52px; height: 52px; background: #FF2E7E; color: #fff; box-shadow: 0 6px 18px rgba(255, 46, 126, 0.45); }
+  .fl-btn.play:hover { filter: brightness(1.08); }
+  .fl-btn svg { width: 20px; height: 20px; }
+  .fl-btn.play svg { width: 24px; height: 24px; }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div class="fl-header">
+      <div class="fl-title"><span class="fl-dot" id="fl-dot"></span>专注钟</div>
+      <button class="fl-close" id="fl-close" title="隐藏">×</button>
+    </div>
+    <div class="fl-ring-wrap">
+      <svg viewBox="0 0 150 150" width="150" height="150">
+        <circle class="fl-ring-bg" cx="75" cy="75" r="66"></circle>
+        <circle class="fl-ring-fill" id="fl-ring" cx="75" cy="75" r="66"></circle>
+      </svg>
+      <div class="fl-center">
+        <div class="fl-time" id="fl-time">25:00</div>
+        <div class="fl-phase" id="fl-phase">准备开始</div>
+      </div>
+    </div>
+    <div class="fl-controls">
+      <button class="fl-btn side" id="fl-reset" title="重置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      </button>
+      <button class="fl-btn play" id="fl-toggle">
+        <svg viewBox="0 0 24 24" fill="currentColor" id="fl-icon"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+      </button>
+      <button class="fl-btn side" id="fl-skip" title="跳过">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+      </button>
+    </div>
+  </div>
+  <script src="float.js"></script>
+</body>
+</html>
