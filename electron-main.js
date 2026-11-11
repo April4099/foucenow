@@ -1,11 +1,21 @@
-const { app, BrowserWindow, Menu, Tray, shell, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 let tray = null;
 let isQuitting = false;
 let updateAvailable = false;
+let cachedUpdateEvent = null; // 缓冲最近一次更新事件，供渲染端错过后补拉
+
+/* 把更新事件发给渲染端；若渲染端尚未就绪，则先缓存，待其 pull 时补发 */
+function pushUpdateEvent(type, payload) {
+  cachedUpdateEvent = { type, payload };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(type, payload);
+  }
+}
 
 /* ========== 单实例（挂后台后从桌面图标唤回） ========== */
 const gotLock = app.requestSingleInstanceLock();
@@ -109,26 +119,36 @@ function checkForUpdates() {
   });
 }
 
+/* ========== 把 release notes 整理成可读文本 ========== */
+function formatNotes(info) {
+  let notes = info && info.releaseNotes;
+  if (!notes) return '（未提供更新说明）';
+  if (Array.isArray(notes)) {
+    notes = notes.map(n => (typeof n === 'string' ? n : (n && n.notes) || '')).join('\n');
+  }
+  notes = String(notes).trim();
+  if (!notes) return '（未提供更新说明）';
+  notes = notes.replace(/\n{3,}/g, '\n\n'); // 压缩多余空行
+  if (notes.length > 1200) notes = notes.slice(0, 1200) + '\n…（内容过长，完整说明见官网 Release）';
+  return notes;
+}
+
 autoUpdater.on('update-available', (info) => {
   updateAvailable = true;
   const currentVersion = app.getVersion();
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: '发现新版本',
-    message: `发现新版本 v${info.version}`,
-    detail: `当前版本：v${currentVersion}\n新版本：v${info.version}\n\n是否现在下载更新？`,
-    buttons: ['立即更新', '稍后再说'],
-    defaultId: 0,
-    cancelId: 1
-  }).then(result => {
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate();
-    }
+  const notes = formatNotes(info);
+  pushUpdateEvent('update-available', {
+    version: info.version,
+    currentVersion,
+    notes
   });
 });
 
 autoUpdater.on('update-not-available', () => {
   console.log('[更新] 已是最新版本');
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-not-available');
+  }
 });
 
 autoUpdater.on('download-progress', (progress) => {
@@ -143,21 +163,38 @@ autoUpdater.on('download-progress', (progress) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: '更新就绪',
-    message: '新版本已下载完成',
-    detail: '点击「立即重启」完成更新，软件将自动重启。',
-    buttons: ['立即重启', '稍后重启'],
-    defaultId: 0,
-    cancelId: 1
-  }).then(result => {
-    if (result.response === 0) {
-      isQuitting = true;
-      autoUpdater.quitAndInstall();
-    }
+  const notes = formatNotes(info);
+  // 记录到 userData，下一次启动（新版本）时弹出“本次更新内容”
+  try {
+    fs.writeFileSync(
+      path.join(app.getPath('userData'), '.pending-update.json'),
+      JSON.stringify({ version: info.version, notes })
+    );
+  } catch (e) { /* 忽略写入失败 */ }
+
+  pushUpdateEvent('update-downloaded', {
+    version: info.version,
+    notes
   });
 });
+
+/* ========== 启动后检查“上一次更新”并弹窗告知本次更新内容 ========== */
+function checkPendingUpdate() {
+  const f = path.join(app.getPath('userData'), '.pending-update.json');
+  if (!fs.existsSync(f)) return;
+  let d;
+  try {
+    d = JSON.parse(fs.readFileSync(f, 'utf8'));
+    fs.unlinkSync(f); // 读取后即删除，避免重复提示
+  } catch (e) { return; }
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    pushUpdateEvent('update-done', {
+      version: d.version,
+      notes: d.notes || ''
+    });
+  }, 1200);
+}
 
 autoUpdater.on('error', (err) => {
   console.log('[更新] 错误:', err.message);
@@ -172,6 +209,26 @@ ipcMain.handle('check-update', () => {
 
 ipcMain.handle('get-version', () => {
   return app.getVersion();
+});
+
+/* 渲染端点击「立即更新」→ 开始联网下载 */
+ipcMain.handle('update-start-download', () => {
+  autoUpdater.downloadUpdate();
+  return { status: 'downloading' };
+});
+
+/* 渲染端点击「立即重启」→ 退出并安装已下载的更新 */
+ipcMain.handle('update-restart', () => {
+  isQuitting = true;
+  autoUpdater.quitAndInstall();
+  return { status: 'restarting' };
+});
+
+/* 渲染端启动时补拉可能错过的更新事件 */
+ipcMain.handle('pull-update-event', () => {
+  const ev = cachedUpdateEvent;
+  cachedUpdateEvent = null;
+  return ev;
 });
 
 // 窗口控制：最小化 / 最大化 / 关闭挂后台 / 完全退出
@@ -198,6 +255,7 @@ ipcMain.handle('app-quit', () => {
 app.whenReady().then(() => {
   createWindow();
   createTray();
+  checkPendingUpdate(); // 若上次更新已装好，启动后告知本次更新内容
 });
 
 app.on('window-all-closed', () => {

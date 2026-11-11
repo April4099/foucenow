@@ -1,7 +1,7 @@
 {
   "name": "focusnow",
   "productName": "此刻FocusNow",
-  "version": "1.5.0",
+  "version": "1.5.3",
   "description": "此刻 FocusNow - 专注日程管理",
   "main": "electron-main.js",
   "author": "FocusNow",
@@ -20,16 +20,28 @@
     "productName": "此刻FocusNow",
     "copyright": "Copyright © 2026 FocusNow",
     "directories": {
-      "output": "release"
+      "output": "C:/Users/april/AppData/Local/Temp/fn_build"
     },
     "files": [
-      "index.html",
-      "style.css",
-      "app.js",
-      "electron-main.js",
-      "preload.js",
-      "icon.png",
-      "package.json"
+      "**/*",
+      "!android",
+      "!dist",
+      "!dist2",
+      "!dist3",
+      "!release",
+      "!release2",
+      "!release3",
+      "!release4",
+      "!release_win",
+      "!release_winv2",
+      "!node_modules/.bin",
+      "!node_modules/**/*.map",
+      "!*.log",
+      "!.git",
+      "!*.sh",
+      "!*.bat",
+      "!*.vbs",
+      "!*.md"
     ],
     "win": {
       "target": [
@@ -46,7 +58,7 @@
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "shortcutName": "此刻FocusNow",
       "artifactName": "FocusNow-Setup-${version}.exe"
@@ -57,10 +69,12 @@
       "repo": "foucenow"
     }
   },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
   "devDependencies": {
     "electron": "^28.3.3",
     "electron-builder": "^26.18.0",
-    "electron-updater": "^6.8.11",
     "sharp": "^0.35.5"
   }
 }

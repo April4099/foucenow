@@ -6,6 +6,32 @@
 (function () {
   'use strict';
 
+  /* ---------- localStorage 兜底 ----------
+     部分安卓 WebView 在 file:// 下会禁用 localStorage 并抛 SecurityError，
+     导致整页初始化中断（白屏/打不开）。这里先探测，若不可用则退回内存存储，
+     保证应用在任何环境都能正常启动。（安卓壳已改用合成 https 源加载，
+     正常情况下真实 localStorage 可用，数据可持久化。） */
+  try {
+    var __t = '__fn_probe__';
+    window.localStorage.setItem(__t, '1');
+    window.localStorage.removeItem(__t);
+  } catch (e) {
+    var __mem = {};
+    try {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        value: {
+          getItem: function (k) { return Object.prototype.hasOwnProperty.call(__mem, k) ? __mem[k] : null; },
+          setItem: function (k, v) { __mem[k] = String(v); },
+          removeItem: function (k) { delete __mem[k]; },
+          clear: function () { __mem = {}; },
+          key: function (i) { return Object.keys(__mem)[i] || null; },
+          get length() { return Object.keys(__mem).length; }
+        }
+      });
+    } catch (e2) { /* 极端情况下忽略，按默认处理 */ }
+  }
+
   /* ---------- 工具 ---------- */
   const $ = (s, c) => (c || document).querySelector(s);
   const $$ = (s, c) => Array.from((c || document).querySelectorAll(s));
@@ -202,7 +228,7 @@
      ========================================== */
   const viewTitles = {
     today: '今日', todos: '待办', schedule: '日程',
-    calendar: '日历', focus: '专注计时', settings: '我的'
+    calendar: '日历', focus: '专注计时', settings: '设置'
   };
 
   function switchView(view) {
@@ -477,9 +503,12 @@
       hourEvents.forEach(ev => {
         const dur = ev.end ? minutesFromHM(ev.end) - minutesFromHM(ev.start) : 60;
         const h2 = Math.max(30, (dur / 60) * 56 - 4);
-        html += `<div class="timeline-event${ev.reminder >= 0 ? ' event-high' : ''}" data-event-id="${ev.id}" style="height:${h2}px">
+        const evCat = ev.category || '其他';
+        const evHigh = ev.reminder >= 0;
+        const repeatLabel = ({ daily: '每天', weekly: '每周', monthly: '每月' })[ev.repeat] || '';
+        html += `<div class="timeline-event${evHigh ? ' event-high' : ''}" data-event-id="${ev.id}" data-cat="${evCat}" style="height:${h2}px;background:var(--tag-bg-${evCat}, var(--accent-pale));border-left-color:var(--tag-fg-${evCat}, var(--accent));">
           <strong>${escapeHtml(ev.title)}</strong>
-          <span>${ev.start}${ev.end ? '-' + ev.end : ''}${ev.repeat !== 'none' ? ' · ' + ({ daily: '每天', weekly: '每周', monthly: '每月' })[ev.repeat] : ''}</span>
+          <span>${evHigh ? '🔔 ' : ''}${ev.start}${ev.end ? '-' + ev.end : ''}${repeatLabel ? ' · ' + repeatLabel : ''}</span>
         </div>`;
       });
       html += '</div></div>';
@@ -2219,14 +2248,8 @@
   /* ==========================================
      窗口控制（✕ 关闭挂后台 / ⏻ 完全退出）
      ========================================== */
-  function isAndroidApp() {
-    return typeof window.AppControl !== 'undefined' && window.AppControl !== null;
-  }
-
   function winCloseToBackground() {
-    if (isAndroidApp()) {
-      window.AppControl.minimize();
-    } else if (window.electronAPI && window.electronAPI.winHide) {
+    if (window.electronAPI && window.electronAPI.winHide) {
       window.electronAPI.winHide();
       showToast('已关闭到后台，程序继续运行 ⏳');
     } else {
@@ -2237,9 +2260,7 @@
   function winPowerOff() {
     const ok = window.confirm('完全关闭程序？\n计时将停止，数据已自动保存。');
     if (!ok) return;
-    if (isAndroidApp()) {
-      window.AppControl.exit();
-    } else if (window.electronAPI && window.electronAPI.quitApp) {
+    if (window.electronAPI && window.electronAPI.quitApp) {
       window.electronAPI.quitApp();
     } else {
       showToast('浏览器预览模式下无需退出', 'warning');
@@ -2265,6 +2286,137 @@
   }
 
   /* ==========================================
+     应用内更新弹窗（替代系统原生对话框）
+     ========================================== */
+  function initUpdateUI() {
+    const overlay = $('#modal-update');
+    if (!overlay) return;
+    const iconEl = $('#update-modal-icon');
+    const titleEl = $('#update-modal-title');
+    const subEl = $('#update-modal-sub');
+    const notesEl = $('#update-modal-notes');
+    const progWrap = $('#update-modal-progress');
+    const progFill = $('#update-progress-fill');
+    const progText = $('#update-progress-text');
+    const actionsEl = $('#update-modal-actions');
+    const btnMain = $('#update-btn-main');
+    const btnLater = $('#update-btn-later');
+
+    // 当前更新上下文：记住版本号，供下载中状态使用
+    const updateCtx = { version: '' };
+
+    function renderModal(opts) {
+      notesEl.textContent = (opts.notes && opts.notes.trim()) ? opts.notes : '（未提供更新说明）';
+      if (opts.mode === 'available') {
+        iconEl.textContent = '⬆️';
+        titleEl.textContent = '发现新版本';
+        subEl.textContent = `v${opts.version} 现已可用（当前 v${opts.currentVersion}）`;
+        progWrap.style.display = 'none';
+        actionsEl.style.display = 'flex';
+        btnLater.style.display = '';
+        btnLater.textContent = '稍后再说';
+        btnMain.textContent = '立即更新 →';
+        btnMain.dataset.action = 'download';
+      } else if (opts.mode === 'downloading') {
+        iconEl.textContent = '⬇️';
+        titleEl.textContent = '正在下载更新';
+        subEl.textContent = `v${opts.version} 下载中…`;
+        progWrap.style.display = '';
+        actionsEl.style.display = 'none';
+        progFill.style.width = '0%';
+        progText.textContent = '准备下载… 0%';
+      } else if (opts.mode === 'downloaded') {
+        iconEl.textContent = '✅';
+        titleEl.textContent = '更新就绪';
+        subEl.textContent = `v${opts.version} 已下载完成，重启后生效`;
+        progWrap.style.display = 'none';
+        actionsEl.style.display = 'flex';
+        btnLater.style.display = '';
+        btnLater.textContent = '稍后重启';
+        btnMain.textContent = '立即重启 ⟳';
+        btnMain.dataset.action = 'restart';
+      } else if (opts.mode === 'done') {
+        iconEl.textContent = '🎉';
+        titleEl.textContent = '更新完成 ✓';
+        subEl.textContent = `已更新到 v${opts.version}`;
+        progWrap.style.display = 'none';
+        actionsEl.style.display = 'flex';
+        btnLater.style.display = 'none';
+        btnMain.textContent = '好';
+        btnMain.dataset.action = 'close';
+      }
+      openModal('modal-update');
+    }
+
+    // 主按钮：根据当前动作执行
+    btnMain.addEventListener('click', () => {
+      const action = btnMain.dataset.action;
+      if (action === 'download') {
+        renderModal({ mode: 'downloading', version: updateCtx.version });
+        if (window.electronAPI && window.electronAPI.startUpdateDownload) {
+          window.electronAPI.startUpdateDownload();
+        }
+      } else if (action === 'restart') {
+        if (window.electronAPI && window.electronAPI.restartToUpdate) {
+          window.electronAPI.restartToUpdate();
+        }
+      } else if (action === 'close') {
+        closeModal('modal-update');
+      }
+    });
+    btnLater.addEventListener('click', () => closeModal('modal-update'));
+
+    // 统一分发来自主进程的更新事件
+    function handleUpdateEvent(type, d) {
+      if (type === 'update-available') {
+        updateCtx.version = d.version;
+        renderModal({ mode: 'available', version: d.version, currentVersion: d.currentVersion, notes: d.notes });
+      } else if (type === 'update-progress') {
+        if (progWrap.style.display !== 'none') {
+          const pct = d.percent || 0;
+          progFill.style.width = pct + '%';
+          const speed = d.speed || 0;
+          progText.textContent = `下载中… ${pct}%  ·  ${speed} KB/s`;
+        }
+      } else if (type === 'update-downloaded') {
+        updateCtx.version = d.version;
+        renderModal({ mode: 'downloaded', version: d.version, notes: d.notes });
+      } else if (type === 'update-done') {
+        updateCtx.version = d.version;
+        renderModal({ mode: 'done', version: d.version, notes: d.notes });
+      }
+    }
+
+    const api = window.electronAPI;
+    if (api) {
+      if (api.onUpdateAvailable) api.onUpdateAvailable(d => handleUpdateEvent('update-available', d));
+      if (api.onUpdateProgress) api.onUpdateProgress(d => handleUpdateEvent('update-progress', d));
+      if (api.onUpdateDownloaded) api.onUpdateDownloaded(d => handleUpdateEvent('update-downloaded', d));
+      if (api.onUpdateDone) api.onUpdateDone(d => handleUpdateEvent('update-done', d));
+      if (api.onUpdateNotAvailable) api.onUpdateNotAvailable(() => showToast('已是最新版本 ✓', 'success'));
+      // 补拉可能错过的事件（主进程已检查但渲染端尚未就绪）
+      if (api.pullUpdateEvent) {
+        api.pullUpdateEvent().then(ev => {
+          if (ev && ev.type) handleUpdateEvent(ev.type, ev.payload);
+        }).catch(() => {});
+      }
+      // 设置页「检查更新」按钮
+      const btnCheck = $('#btn-check-update');
+      if (btnCheck && api.checkUpdate) {
+        btnCheck.addEventListener('click', () => {
+          if (btnCheck.disabled) return;
+          btnCheck.disabled = true;
+          const orig = btnCheck.textContent;
+          btnCheck.textContent = '检查中…';
+          api.checkUpdate().catch(() => {}).then(() => {
+            setTimeout(() => { btnCheck.disabled = false; btnCheck.textContent = orig; }, 1500);
+          });
+        });
+      }
+    }
+  }
+
+  /* ==========================================
      启动
      ========================================== */
   function init() {
@@ -2286,6 +2438,7 @@
     initFloatingWidget();
     bindSettingsEvents();
     bindWindowControls();
+    initUpdateUI();
 
     // 显示版本号（桌面端取真实版本）
     if (window.electronAPI && window.electronAPI.getVersion) {

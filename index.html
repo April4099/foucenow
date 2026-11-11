@@ -72,7 +72,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
-          <span>我的</span>
+          <span>设置</span>
         </button>
         <div class="sidebar-focus-ring">
           <svg viewBox="0 0 80 80">
@@ -134,16 +134,6 @@
           </div>
         </div>
       </header>
-
-      <!-- 移动端浮动窗口控制（无顶栏时显示） -->
-      <div class="win-controls win-controls-float" id="win-controls-float">
-        <button class="win-btn win-close" data-win="close" title="关闭页面，程序挂后台">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-        <button class="win-btn win-power" data-win="power" title="完全关闭程序">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
-        </button>
-      </div>
 
       <!-- 内容 -->
       <main class="main-content">
@@ -432,10 +422,10 @@
           </div>
         </section>
 
-        <!-- ========== 我的 / 设置 ========== -->
+        <!-- ========== 设置 ========== -->
         <section id="view-settings" class="view">
           <div class="view-header">
-            <h2>我的</h2>
+            <h2>设置</h2>
           </div>
 
           <!-- 皮肤主题 -->
@@ -562,7 +552,8 @@
               </ul>
               <div class="notice-version">
                 <span>当前版本</span>
-                <strong id="app-version">v1.5.0</strong>
+                <strong id="app-version">v1.5.2</strong>
+                <button class="btn-secondary btn-sm" id="btn-check-update">检查更新</button>
               </div>
             </div>
           </div>
@@ -732,7 +723,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
-        <span>我的</span>
+        <span>设置</span>
       </button>
       <button class="nav-item" data-view="focus">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -1014,6 +1005,24 @@
             </div>
           </div>
           <button class="btn-primary btn-full" id="btn-arrange-confirm">📅 安排到今天</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 弹窗：应用内更新（替代系统原生对话框） ========== -->
+    <div class="modal-overlay" id="modal-update">
+      <div class="modal update-modal">
+        <div class="update-modal-icon" id="update-modal-icon">⬆️</div>
+        <h3 class="update-modal-title" id="update-modal-title">发现新版本</h3>
+        <p class="update-modal-sub" id="update-modal-sub">新版本现已可用</p>
+        <div class="update-notes" id="update-modal-notes"></div>
+        <div class="update-progress" id="update-modal-progress" style="display:none">
+          <div class="update-progress-bar"><div class="update-progress-fill" id="update-progress-fill"></div></div>
+          <p class="update-progress-text" id="update-progress-text">准备下载… 0%</p>
+        </div>
+        <div class="update-modal-actions" id="update-modal-actions">
+          <button class="btn-secondary" id="update-btn-later">稍后再说</button>
+          <button class="btn-primary" id="update-btn-main">立即更新</button>
         </div>
       </div>
     </div>
