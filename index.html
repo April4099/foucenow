@@ -265,6 +265,7 @@
                 <button class="drag-mode-chip" data-drag-mode="free">🖐 自由</button>
                 <button class="drag-mode-chip" data-drag-mode="time">⏱ 定时</button>
               </div>
+              <button class="btn-secondary btn-sm" id="btn-replan" title="智能整理遗留任务">🧹 智能整理</button>
               <button class="fab-add" id="btn-add-event" title="添加日程">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
                   <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -368,6 +369,15 @@
             <div class="heat-swatch heat-3"></div>
             <div class="heat-swatch heat-4"></div>
             <span class="heat-label">专注多</span>
+          </div>
+
+          <!-- 本周回顾（叙事化） -->
+          <div class="week-narrative" id="week-narrative" style="display:none">
+            <div class="wn-head">
+              <span class="wn-title">📖 本周回顾</span>
+              <span class="wn-sub">过去 7 天</span>
+            </div>
+            <p class="wn-text" id="week-narrative-text"></p>
           </div>
 
           <!-- 选中日详情 -->
@@ -600,6 +610,12 @@
                 </svg>
                 <span>悬浮钟</span>
               </button>
+              <button class="float-widget-toggle" id="btn-shield-toggle" title="开启专注护盾（全屏遮罩，挡住桌面干扰）">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3z"/>
+                </svg>
+                <span>护盾</span>
+              </button>
             </div>
           </div>
 
@@ -683,6 +699,7 @@
               <div class="fstat-label">连续天数</div>
             </div>
           </div>
+          <div class="focus-quality" id="focus-quality"></div>
         </section>
 
       </main>
@@ -1023,6 +1040,26 @@
         <div class="update-modal-actions" id="update-modal-actions">
           <button class="btn-secondary" id="update-btn-later">稍后再说</button>
           <button class="btn-primary" id="update-btn-main">立即更新</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 智能整理（自适应重排） ========== -->
+    <div class="modal-overlay" id="modal-replan">
+      <div class="modal replan-modal">
+        <div class="modal-header">
+          <h3>🧹 智能整理</h3>
+          <button class="icon-btn modal-close" data-close="modal-replan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <p class="modal-desc" id="replan-desc">这些任务已逾期或停留在过去，挑出你想处理的：</p>
+        <div class="replan-list" id="replan-list"></div>
+        <div class="replan-actions">
+          <label class="replan-select-all"><input type="checkbox" id="replan-select-all" checked> 全选</label>
+          <span class="replan-spacer"></span>
+          <button class="btn-secondary" id="replan-btn-cancel">取消</button>
+          <button class="btn-primary" id="replan-btn-apply">应用整理</button>
         </div>
       </div>
     </div>

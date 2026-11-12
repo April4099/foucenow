@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+    .shield-root {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 38%, rgba(26, 20, 34, 0.92), rgba(8, 6, 12, 0.97));
+      color: #fff; user-select: none; font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+    .shield-phase { font-size: 1.05rem; letter-spacing: 5px; opacity: .65; margin-bottom: 18px; }
+    .shield-time {
+      font-size: 8.5rem; font-weight: 700; line-height: 1;
+      font-family: "SF Mono", "Consolas", monospace;
+      text-shadow: 0 0 48px rgba(255, 90, 160, .35);
+    }
+    .shield-task {
+      margin-top: 18px; font-size: 1.1rem; opacity: .85; max-width: 72%;
+      text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .shield-ctrls { margin-top: 36px; display: flex; gap: 20px; }
+    .shield-btn {
+      width: 66px; height: 66px; border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .06);
+      color: #fff; display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1.5rem; transition: .15s;
+    }
+    .shield-btn:hover { background: rgba(255, 255, 255, .16); transform: scale(1.07); }
+    .shield-exit {
+      position: absolute; top: 22px; right: 26px; font-size: .82rem; opacity: .5;
+      cursor: pointer; border: 1px solid rgba(255, 255, 255, .2); border-radius: 20px;
+      padding: 6px 16px; background: transparent; color: #fff; font-family: inherit;
+    }
+    .shield-exit:hover { opacity: .9; }
+    .shield-hint { position: absolute; bottom: 22px; font-size: .76rem; opacity: .32; }
+  </style>
+</head>
+<body>
+  <div class="shield-root" id="shield-root">
+    <button class="shield-exit" id="shield-exit">退出护盾 ✕</button>
+    <div class="shield-phase" id="shield-phase">准备开始</div>
+    <div class="shield-time" id="shield-time">25:00</div>
+    <div class="shield-task" id="shield-task"></div>
+    <div class="shield-ctrls">
+      <button class="shield-btn" id="shield-toggle" title="播放 / 暂停（空格）">▶</button>
+      <button class="shield-btn" id="shield-reset" title="重置">↺</button>
+      <button class="shield-btn" id="shield-skip" title="跳过">⏭</button>
+    </div>
+    <div class="shield-hint">护盾已开启 · 远离干扰，专注此刻（Esc 退出）</div>
+  </div>
+  <script src="shield.js"></script>
+</body>
+</html>

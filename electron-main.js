@@ -141,9 +141,48 @@ ipcMain.handle('close-float', () => {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-window-state', false);
   return { status: 'closed' };
 });
-ipcMain.on('float-state', (e, state) => { if (floatWindow) floatWindow.webContents.send('float-state', state); });
+ipcMain.on('float-state', (e, state) => {
+  if (floatWindow) floatWindow.webContents.send('float-state', state);
+  if (shieldWindow) shieldWindow.webContents.send('float-state', state);
+});
 ipcMain.on('float-cmd', (e, cmd) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-cmd', cmd); });
 ipcMain.on('float-request-state', (e) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-request-state'); });
+
+/* 专注护盾：全屏/大尺寸常驻置顶浮层，遮住桌面杂乱、只留计时 */
+let shieldWindow = null;
+
+function createShieldWindow() {
+  if (shieldWindow) { shieldWindow.show(); shieldWindow.focus(); return; }
+  const { screen } = require('electron');
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  shieldWindow = new BrowserWindow({
+    width, height, x: 0, y: 0,
+    frame: false, transparent: true, skipTaskbar: true,
+    alwaysOnTop: true, resizable: false, movable: false,
+    backgroundColor: '#00000000',
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+  shieldWindow.setAlwaysOnTop(true, 'screen-saver');
+  shieldWindow.loadFile('shield.html');
+  shieldWindow.once('ready-to-show', () => shieldWindow.show());
+  shieldWindow.on('closed', () => {
+    shieldWindow = null;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('shield-window-state', false);
+  });
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('shield-window-state', true);
+}
+
+ipcMain.handle('open-shield', () => { createShieldWindow(); return { status: 'opened' }; });
+ipcMain.handle('close-shield', () => {
+  if (shieldWindow) { shieldWindow.close(); shieldWindow = null; }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('shield-window-state', false);
+  return { status: 'closed' };
+});
 
 /* ========== 更新检查 ========== */
 function checkForUpdates() {

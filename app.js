@@ -146,8 +146,11 @@
       linkedTodoId: null,
       startedAt: null,
       intervalId: null,
-      customMinutes: 25
-    }
+      customMinutes: 25,
+      distractions: 0,
+      pauses: 0
+    },
+    shieldActive: false
   };
 
   /* ---------- 音效 ---------- */
@@ -593,6 +596,118 @@
           todoCompleted: linkedTodo ? linkedTodo.completed : null
         };
       });
+  }
+
+  /* ---------- 智能整理（自适应重排） ---------- */
+  function dateDiffDays(a, b) {
+    const da = new Date(a + 'T00:00:00');
+    const db = new Date(b + 'T00:00:00');
+    return Math.round((db - da) / 86400000);
+  }
+
+  function computeReplanSuggestions() {
+    const today = todayStr();
+    const sugg = [];
+    app.data.todos.forEach(t => {
+      if (t.completed) return;
+      if (t.due && t.due < today) {
+        const dd = dateDiffDays(t.due, today);
+        sugg.push({ id: uid(), kind: 'todo', refId: t.id, title: t.title, category: t.category,
+          reason: '已逾期 ' + dd + ' 天', actions: ['roll', 'weekly', 'drop'], def: dd >= 4 ? 'drop' : 'roll' });
+      } else if (!t.due && t.createdAt && dateDiffDays(t.createdAt.slice(0, 10), today) >= 7) {
+        sugg.push({ id: uid(), kind: 'todo', refId: t.id, title: t.title, category: t.category,
+          reason: '挂起超一周未安排', actions: ['weekly', 'drop'], def: 'weekly' });
+      }
+    });
+    app.data.events.forEach(ev => {
+      if (ev.date < today) {
+        const linked = ev.todoId ? app.data.todos.find(t => t.id === ev.todoId) : null;
+        if (linked && linked.completed) return;
+        sugg.push({ id: uid(), kind: 'event', refId: ev.id, title: ev.title, category: ev.category,
+          reason: '排在 ' + ev.date + '（已过）', actions: ['roll', 'drop'], def: 'roll' });
+      }
+    });
+    return sugg;
+  }
+
+  const REPLAN_ACTION_LABEL = { roll: '滚到明天', weekly: '转为每周目标', drop: '放弃' };
+
+  function renderReplan() {
+    const list = computeReplanSuggestions();
+    const box = $('#replan-list');
+    const desc = $('#replan-desc');
+    if (!box) return;
+    const applyBtn = $('#replan-btn-apply');
+    if (!list.length) {
+      box.innerHTML = '<div class="replan-empty">🎉 没有逾期或遗留的任务，日程很清爽！</div>';
+      if (desc) desc.textContent = '当前没有需要整理的项。';
+      if (applyBtn) applyBtn.style.display = 'none';
+      return;
+    }
+    if (applyBtn) applyBtn.style.display = '';
+    if (desc) desc.textContent = '检测到 ' + list.length + ' 项逾期或停留在过去的任务，挑出你想处理的：';
+    box.innerHTML = list.map(s => `
+      <div class="replan-item">
+        <label class="replan-check">
+          <input type="checkbox" class="replan-item-check" data-id="${s.id}" checked>
+          <span class="replan-item-title">${escapeHtml(s.title)}</span>
+        </label>
+        ${catBadge(s.category || '其他')}
+        <span class="replan-reason">${s.reason}</span>
+        <select class="replan-action" data-id="${s.id}">
+          ${s.actions.map(a => `<option value="${a}"${a === s.def ? ' selected' : ''}>${REPLAN_ACTION_LABEL[a]}</option>`).join('')}
+        </select>
+      </div>`).join('');
+    box._suggestions = list;
+  }
+
+  function applyReplan() {
+    const box = $('#replan-list');
+    const list = (box && box._suggestions) || [];
+    const tomorrow = addDays(todayStr(), 1);
+    let roll = 0, weekly = 0, drop = 0;
+    list.forEach(s => {
+      const checkEl = box.querySelector('.replan-item-check[data-id="' + s.id + '"]');
+      if (checkEl && !checkEl.checked) return;
+      const actionEl = box.querySelector('.replan-action[data-id="' + s.id + '"]');
+      const action = actionEl ? actionEl.value : s.def;
+      if (s.kind === 'todo') {
+        const t = app.data.todos.find(x => x.id === s.refId);
+        if (!t) return;
+        if (action === 'roll') { t.due = tomorrow; roll++; }
+        else if (action === 'weekly') {
+          app.data.dailyTodos = app.data.dailyTodos || [];
+          app.data.dailyTodos.push({ id: uid(), title: t.title, category: t.category || '其他', history: {} });
+          app.data.todos = app.data.todos.filter(x => x.id !== t.id); weekly++;
+        } else { app.data.todos = app.data.todos.filter(x => x.id !== t.id); drop++; }
+      } else {
+        const ev = app.data.events.find(x => x.id === s.refId);
+        if (!ev) return;
+        if (action === 'roll') { ev.date = tomorrow; roll++; }
+        else if (action === 'weekly') {
+          app.data.dailyTodos = app.data.dailyTodos || [];
+          app.data.dailyTodos.push({ id: uid(), title: ev.title, category: ev.category || '其他', history: {} });
+          app.data.events = app.data.events.filter(x => x.id !== ev.id); weekly++;
+        } else { app.data.events = app.data.events.filter(x => x.id !== ev.id); drop++; }
+      }
+    });
+    saveState();
+    closeModal('modal-replan');
+    showToast('已整理：滚到明天 ' + roll + ' · 转每周 ' + weekly + ' · 放弃 ' + drop, 'success');
+    refresh();
+  }
+
+  function initReplan() {
+    const btn = $('#btn-replan');
+    if (btn) btn.addEventListener('click', () => { renderReplan(); openModal('modal-replan'); });
+    const applyBtn = $('#replan-btn-apply');
+    if (applyBtn) applyBtn.addEventListener('click', applyReplan);
+    const cancelBtn = $('#replan-btn-cancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => closeModal('modal-replan'));
+    const all = $('#replan-select-all');
+    if (all) all.addEventListener('change', e => {
+      document.querySelectorAll('.replan-item-check').forEach(c => c.checked = e.target.checked);
+    });
   }
 
   /** 渲染安排台（与日程表共用 scheduleDate） */
@@ -1041,6 +1156,9 @@
 
     // 月度统计
     renderMonthStats(year, month, filter);
+
+    // 本周回顾（叙事化）
+    renderWeekNarrative();
   }
 
   function renderDayDetail(dateStr, filter) {
@@ -1097,9 +1215,58 @@
             <span class="day-item-time">${s.durationMin}分</span>
             <span class="day-item-title">${todo ? escapeHtml(todo.title) : '独立专注'}</span>
             ${catBadge(s.category || '专注')}
+            ${s.focusScore != null ? `<span class="day-quality" title="专注质量 ${s.focusScore} 分（分心 ${s.distractions || 0} 次 / 暂停 ${s.pauses || 0} 次）">${qualityIcon(s.focusScore)}</span>` : ''}
           </div>`;
         }).join('')
       : '<div class="day-empty">暂无专注记录</div>';
+  }
+
+  /* ---------- 本周回顾（叙事化） ---------- */
+  function buildWeekNarrative() {
+    const today = todayStr();
+    const days = [];
+    for (let i = 6; i >= 0; i--) days.push(addDays(today, -i));
+    const inWeek = s => days.includes(s.date);
+    const ws = app.data.sessions.filter(inWeek);
+    if (!ws.length) return null;
+    const totalMin = ws.reduce((a, s) => a + s.durationMin, 0);
+    const activeDays = new Set(ws.map(s => s.date)).size;
+    const avg = Math.round(totalMin / activeDays);
+    const byDay = {};
+    ws.forEach(s => byDay[s.date] = (byDay[s.date] || 0) + s.durationMin);
+    let bestDay = null, bestMin = -1;
+    Object.entries(byDay).forEach(([d, m]) => { if (m > bestMin) { bestMin = m; bestDay = d; } });
+    const slots = { 凌晨: 0, 早晨: 0, 上午: 0, 中午: 0, 下午: 0, 晚上: 0 };
+    ws.forEach(s => {
+      const h = s.startTime ? new Date(s.startTime).getHours() : 12;
+      if (h < 5) slots.凌晨 += s.durationMin;
+      else if (h < 8) slots.早晨 += s.durationMin;
+      else if (h < 11) slots.上午 += s.durationMin;
+      else if (h < 14) slots.中午 += s.durationMin;
+      else if (h < 18) slots.下午 += s.durationMin;
+      else slots.晚上 += s.durationMin;
+    });
+    const topSlot = Object.entries(slots).sort((a, b) => b[1] - a[1])[0];
+    const byCat = {};
+    ws.forEach(s => { const c = s.category || '其他'; byCat[c] = (byCat[c] || 0) + s.durationMin; });
+    const topCat = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
+    const avgQ = Math.round(ws.reduce((a, s) => a + (s.focusScore || 0), 0) / ws.length);
+    const qWord = avgQ >= 80 ? '非常专注' : avgQ >= 60 ? '比较专注' : avgQ >= 40 ? '偶有分心' : '容易分心';
+    const bestDayCN = bestDay ? formatDateCN(bestDay, true) : '';
+    const hours = Math.round(totalMin / 60 * 10) / 10;
+    const tail = topSlot[1] > totalMin * 0.4
+      ? '你的节奏明显偏向「' + topSlot[0] + '」，可以把最重要的事尽量排在这个时段。'
+      : '你的专注时段比较分散，试着固定一个每天不变的高效窗口，会更容易进入状态。';
+    return '过去 7 天，你在 ' + activeDays + ' 天里累计专注 ' + totalMin + ' 分钟（约 ' + hours + ' 小时），日均 ' + avg + ' 分钟，整体' + qWord + '（平均质量 ' + avgQ + ' 分）。最高产的是 ' + bestDayCN + '（' + bestMin + ' 分钟），最常投入的时段是「' + topSlot[0] + '」，主力落在「' + topCat[0] + '」类任务。' + tail;
+  }
+
+  function renderWeekNarrative() {
+    const el = $('#week-narrative');
+    if (!el) return;
+    const text = buildWeekNarrative();
+    if (!text) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    $('#week-narrative-text').textContent = text;
   }
 
   function renderMonthStats(year, month, filter) {
@@ -1166,6 +1333,8 @@
     if (app.timer.running) return;
     app.timer.running = true;
     app.timer.startedAt = new Date().toISOString();
+    app.timer.distractions = 0;
+    app.timer.pauses = 0;
 
     if (app.timer.mode === 'stopwatch') {
       app.timer.intervalId = setInterval(() => { app.timer.remaining++; updateTimerDisplay(); }, 1000);
@@ -1196,7 +1365,12 @@
   function resetTimer() { pauseTimer(); initTimer(); }
 
   function toggleTimer() {
-    app.timer.running ? pauseTimer() : startTimer();
+    if (app.timer.running) {
+      app.timer.pauses = (app.timer.pauses || 0) + 1;
+      pauseTimer();
+    } else {
+      startTimer();
+    }
   }
 
   function skipPhase() {
@@ -1206,6 +1380,7 @@
   }
 
   function timerComplete(skipped) {
+    closeShieldIfOpen();
     if (!skipped) playCompleteSound();
 
     const focusPhases = ['work', 'custom', 'stopwatch'];
@@ -1227,7 +1402,10 @@
         id: uid(), type: app.timer.mode, phase: app.timer.phase,
         date: todayStr(), startTime: app.timer.startedAt,
         endTime: new Date().toISOString(), durationMin: elapsedMin,
-        todoId: app.timer.linkedTodoId || null, category
+        todoId: app.timer.linkedTodoId || null, category,
+        distractions: app.timer.distractions || 0,
+        pauses: app.timer.pauses || 0,
+        focusScore: computeFocusScore(elapsedMin, app.timer.distractions || 0, app.timer.pauses || 0)
       });
       saveState();
     }
@@ -1263,6 +1441,41 @@
         sendNotification('休息结束', '准备开始下一轮专注 💪');
       }
     }
+  }
+
+  /* ---------- 专注质量采集与评分 ---------- */
+  function computeFocusScore(min, distractions, pauses) {
+    if (!min || min <= 0) return 0;
+    let score = 100;
+    score -= (distractions || 0) * 6;
+    score -= Math.min(pauses || 0, 6) * 4;
+    if (min < 10) score += 10; // 短会话适度放宽
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  function qualityIcon(score) {
+    if (score >= 85) return '🟢';
+    if (score >= 70) return '🔵';
+    if (score >= 50) return '🟡';
+    if (score >= 30) return '🟠';
+    return '🔴';
+  }
+
+  function initFocusQuality() {
+    const isFocusPhase = () => ['work', 'custom', 'stopwatch'].includes(app.timer.phase);
+    let lastHidden = false;
+    window.addEventListener('blur', () => {
+      if (app.timer.running && isFocusPhase() && !app.shieldActive) {
+        app.timer.distractions = (app.timer.distractions || 0) + 1;
+      }
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden === lastHidden) return;
+      lastHidden = document.hidden;
+      if (document.hidden && app.timer.running && isFocusPhase() && !app.shieldActive) {
+        app.timer.distractions = (app.timer.distractions || 0) + 1;
+      }
+    });
   }
 
   function updateTimerDisplay() {
@@ -1334,6 +1547,18 @@
     let streak = 0, cd = today;
     while (app.data.sessions.some(s => s.date === cd)) { streak++; cd = addDays(cd, -1); }
     $('#fstat-streak').textContent = streak;
+
+    // 今日专注质量
+    const avgQuality = ts.length ? Math.round(ts.reduce((a, s) => a + (s.focusScore || 0), 0) / ts.length) : 0;
+    const qEl = $('#focus-quality');
+    if (qEl) {
+      if (ts.length) {
+        const stars = avgQuality >= 85 ? '★★★★★' : avgQuality >= 70 ? '★★★★☆' : avgQuality >= 50 ? '★★★☆☆' : avgQuality >= 30 ? '★★☆☆☆' : '★☆☆☆☆';
+        qEl.innerHTML = `<span class="fq-label">今日专注质量</span><span class="fq-stars">${stars}</span><span class="fq-score">${avgQuality}</span>`;
+      } else {
+        qEl.innerHTML = '<span class="fq-label">今日专注质量</span><span class="fq-hint">还没有专注记录</span>';
+      }
+    }
 
     updateTimerDisplay();
     updateTimerControls();
@@ -2049,6 +2274,40 @@
   };
   let floatWindowOpen = false; // 独立置顶悬浮窗是否打开
 
+  /* ---------- 专注护盾 ---------- */
+  let shieldOpen = false;
+
+  function closeShieldIfOpen() {
+    if (shieldOpen && window.electronAPI && window.electronAPI.closeShield) {
+      window.electronAPI.closeShield();
+    }
+  }
+
+  function initShield() {
+    const btn = $('#btn-shield-toggle');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        if (!window.electronAPI || !window.electronAPI.openShield) {
+          showToast('护盾模式仅桌面端可用（打包后的应用）', 'info');
+          return;
+        }
+        if (shieldOpen) window.electronAPI.closeShield();
+        else window.electronAPI.openShield();
+      });
+    }
+    if (window.electronAPI && window.electronAPI.onShieldWindowState) {
+      window.electronAPI.onShieldWindowState(open => {
+        shieldOpen = !!open;
+        app.shieldActive = shieldOpen;
+        if (btn) {
+          btn.classList.toggle('active', shieldOpen);
+          const span = btn.querySelector('span');
+          if (span) span.textContent = shieldOpen ? '护盾中' : '护盾';
+        }
+      });
+    }
+  }
+
   function initFloatingWidget() {
     const widget = $('#floating-timer');
     const ball = $('#floating-ball');
@@ -2474,6 +2733,15 @@
     bindSettingsEvents();
     bindWindowControls();
     initUpdateUI();
+    initFocusQuality();
+    initReplan();
+    initShield();
+
+    // 智能整理：若有过期/遗留任务，轻提示
+    const pendingReplan = computeReplanSuggestions();
+    if (pendingReplan.length) {
+      setTimeout(() => showToast('🧹 有 ' + pendingReplan.length + ' 项遗留任务，可在「日程安排」点「智能整理」', 'info'), 1500);
+    }
 
     // 显示版本号（桌面端取真实版本）
     if (window.electronAPI && window.electronAPI.getVersion) {

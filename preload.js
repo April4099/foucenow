@@ -28,5 +28,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sendFloatRequestState: () => ipcRenderer.send('float-request-state'),
   openFloat: () => ipcRenderer.invoke('open-float'),
   closeFloat: () => ipcRenderer.invoke('close-float'),
-  onFloatWindowState: (callback) => ipcRenderer.on('float-window-state', (event, open) => callback(open))
+  onFloatWindowState: (callback) => ipcRenderer.on('float-window-state', (event, open) => callback(open)),
+  // 专注护盾（全屏常驻置顶浮层）
+  openShield: () => ipcRenderer.invoke('open-shield'),
+  closeShield: () => ipcRenderer.invoke('close-shield'),
+  onShieldWindowState: (callback) => ipcRenderer.on('shield-window-state', (event, open) => callback(open))
 });
