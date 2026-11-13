@@ -109,6 +109,7 @@ function createTray() {
 
 /* ========== 独立悬浮专注钟（可离开主窗口，默认置顶） ========== */
 let floatWindow = null;
+let petWindow = null;
 
 function createFloatWindow() {
   if (floatWindow) { floatWindow.show(); floatWindow.focus(); return; }
@@ -184,11 +185,87 @@ ipcMain.handle('close-shield', () => {
   return { status: 'closed' };
 });
 
+/* ========== 桌面宠物（常驻置顶、透明、可拖动） ========== */
+function createPetWindow() {
+  if (petWindow) { petWindow.show(); petWindow.focus(); return; }
+  petWindow = new BrowserWindow({
+    width: 180, height: 220,
+    minWidth: 140, minHeight: 170,
+    frame: false, transparent: true, skipTaskbar: true,
+    alwaysOnTop: true, resizable: true,
+    backgroundColor: '#00000000',
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+  petWindow.loadFile('pet.html');
+  petWindow.once('ready-to-show', () => petWindow.show());
+  petWindow.on('closed', () => {
+    petWindow = null;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pet-window-state', false);
+  });
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pet-window-state', true);
+}
+
+ipcMain.handle('open-pet', () => { createPetWindow(); return { status: 'opened' }; });
+ipcMain.handle('close-pet', () => {
+  if (petWindow) { petWindow.close(); petWindow = null; }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pet-window-state', false);
+  return { status: 'closed' };
+});
+// 主窗口 → 桌宠：同步运行时状态与配置（计时状态、分心名单、宠物/视觉设置）
+ipcMain.on('pet-sync', (e, state) => {
+  if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send('pet-sync', state);
+});
+// 桌宠加载后向主窗口索要最新状态
+ipcMain.on('pet-request-state', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('pet-request-state');
+});
+// 截图前隐藏宠物自身，避免「宠物看着自己」的递归画面
+ipcMain.on('pet-hide', () => { if (petWindow) petWindow.hide(); });
+ipcMain.on('pet-show', () => { if (petWindow) petWindow.show(); });
+
+/* 视觉观测：用用户自己的 key 调其 vision 接口，截图数据不落盘、不经我们服务器 */
+ipcMain.handle('vision-check', async (e, payload) => {
+  const { dataUrl, endpoint, apiKey, model } = payload || {};
+  if (!endpoint || !apiKey || !model || !dataUrl) return { ok: false, text: '观测配置不完整' };
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: '你是「专注监督小助手」。看一张用户桌面截图，用一句中文（不超过25字）温和提醒用户是否在工作：若在工作就鼓励；若在娱乐/分心就说“快回来专注哦”。不要复述屏幕上的敏感文字。' },
+          { role: 'user', content: [
+            { type: 'text', text: '这是我的桌面，我现在在认真做事吗？' },
+            { type: 'image_url', image_url: { url: dataUrl } }
+          ]}
+        ],
+        max_tokens: 60
+      }),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!resp.ok) return { ok: false, text: '观测接口返回 ' + resp.status };
+    const j = await resp.json();
+    const text = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    return { ok: true, text: (text || '').trim() };
+  } catch (err) {
+    return { ok: false, text: '观测失败：' + err.message };
+  }
+});
+
 /* ========== 前台「分心应用」检测（Windows 专用） ========== */
 let fgMonitor = { active: false, apps: [], timer: null, lastDistract: false };
 
 function buildFgScript() {
-  // 取前台窗口所属进程名（PowerShell P/Invoke，base64 编码避免引号转义问题）
+  // 取前台窗口所属进程名 + 窗口标题（PowerShell P/Invoke，base64 编码避免引号转义问题）
   const script = [
     'Add-Type @"',
     'using System;',
@@ -196,11 +273,15 @@ function buildFgScript() {
     'public class FgApi {',
     '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
     '  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);',
+    '  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);',
     '}',
     '"@',
     '$p = 0u;',
     '[FgApi]::GetWindowThreadProcessId([FgApi]::GetForegroundWindow(), [ref]$p) | Out-Null;',
-    '(Get-Process -Id $p).ProcessName'
+    '$name = (Get-Process -Id $p).ProcessName;',
+    '$sb = New-Object System.Text.StringBuilder(512);',
+    '[FgApi]::GetWindowText([FgApi]::GetForegroundWindow(), $sb, 512) | Out-Null;',
+    '$name + "|" + $sb.ToString()'
   ].join('\n');
   return Buffer.from(script, 'utf16le').toString('base64');
 }
@@ -215,22 +296,28 @@ function queryForegroundProcess() {
       { windowsHide: true, timeout: 6000, maxBuffer: 64 * 1024 },
       (err, stdout) => {
         if (err) { resolve(null); return; }
-        const name = (stdout || '').toString().trim().toLowerCase();
-        resolve(name || null);
+        const out = (stdout || '').toString().trim().split('|');
+        const name = (out[0] || '').toLowerCase();
+        const title = (out[1] || '').trim();
+        resolve(name ? { name, title } : null);
       });
   });
 }
 
 async function tickFg() {
-  const name = await queryForegroundProcess();
-  if (!name) { fgMonitor.lastDistract = false; return; }
-  const isDistract = fgMonitor.apps.some(a => name.indexOf(String(a).toLowerCase()) !== -1);
+  const info = await queryForegroundProcess();
+  if (!info) { fgMonitor.lastDistract = false; return; }
+  const isDistract = fgMonitor.apps.some(a => info.name.indexOf(String(a).toLowerCase()) !== -1);
   // 边沿触发：连续停留在分心应用只记 1 次；离开后再进入再记 1 次
   if (isDistract && !fgMonitor.lastDistract) {
     fgMonitor.lastDistract = true;
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('focus-distraction');
   } else if (!isDistract) {
     fgMonitor.lastDistract = false;
+  }
+  // 把前台信息（进程名 + 窗口标题）发给桌宠：用于情绪判断与视觉观测的敏感窗口排除
+  if (petWindow && !petWindow.isDestroyed()) {
+    petWindow.webContents.send('foreground-info', { processName: info.name, title: info.title });
   }
 }
 

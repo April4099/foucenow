@@ -2409,3 +2409,45 @@ body {
 .insight-chip.tone-good { background: var(--success-pale); color: var(--success); border-color: transparent; }
 .insight-chip.tone-warn { background: var(--warning-pale); color: var(--warning); border-color: transparent; }
 .insight-chip.tone-neutral { background: var(--bg-soft); color: var(--text-secondary); }
+
+/* ========== 桌面宠物（主界面控制 + 设置） ========== */
+.pet-summon-btn {
+  margin-top: 12px; width: 100%; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-soft); color: var(--text);
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
+}
+.pet-summon-btn:hover { border-color: var(--primary); color: var(--primary); }
+.pet-summon-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.pet-style-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.pet-style-btn {
+  flex: 1; min-width: 90px; padding: 10px 8px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-soft); color: var(--text);
+  font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
+}
+.pet-style-btn:hover { border-color: var(--primary); }
+.pet-style-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pet-custom-add { margin-top: 10px; }
+.pet-custom-add input[type="file"] { font-size: 0.78rem; color: var(--text-secondary); }
+
+.setting-hint.warning {
+  background: var(--warning-pale, rgba(255,176,32,0.12));
+  color: var(--warning, #d98a00);
+  border: 1px solid rgba(255,176,32,0.3);
+}
+.setting-hint.warning strong { color: inherit; }
+
+.vision-fields { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.vision-field { display: flex; flex-direction: column; gap: 5px; font-size: 0.8rem; color: var(--text-secondary); }
+.vision-field input {
+  padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  font-size: 0.85rem; width: 100%;
+}
+.vision-field input:focus { outline: none; border-color: var(--primary); }
+.vision-field-row { display: flex; gap: 10px; }
+.vision-field-row .vision-field { flex: 1; }
