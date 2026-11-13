@@ -114,6 +114,7 @@
       events: [],
       sessions: [],
       distractionApps: ['wechat', 'chrome', 'msedge', 'firefox', 'steam', 'douyin', 'bilibili'],
+      unlockedAchievements: [],
       settings: {
         pomodoroWork: 25,
         pomodoroShortBreak: 5,
@@ -157,6 +158,10 @@
   // 迁移：老数据可能没有 distractionApps 字段
   if (!Array.isArray(app.data.distractionApps)) {
     app.data.distractionApps = ['wechat', 'chrome', 'msedge', 'firefox', 'steam', 'douyin', 'bilibili'];
+  }
+  // 迁移：老数据可能没有 unlockedAchievements 字段
+  if (!Array.isArray(app.data.unlockedAchievements)) {
+    app.data.unlockedAchievements = [];
   }
 
   /* ---------- 音效 ---------- */
@@ -339,6 +344,7 @@
       '专注不是天赋，是可以练习的技能。', '今天的坚持，是明天的底气。'
     ];
     $('#motivation-text').textContent = motives[Math.floor(Math.random() * motives.length)];
+    renderGrowth();
   }
 
   function renderNextReminder() {
@@ -1165,6 +1171,7 @@
 
     // 本周回顾（叙事化）
     renderWeekNarrative();
+    renderAchievements();
   }
 
   function renderDayDetail(dateStr, filter) {
@@ -1233,7 +1240,7 @@
     const days = [];
     for (let i = 6; i >= 0; i--) days.push(addDays(today, -i));
     const inWeek = s => days.includes(s.date);
-    const ws = app.data.sessions.filter(inWeek);
+    const ws = app.data.sessions.filter(s => inWeek(s) && (s.durationMin || 0) > 0);
     if (!ws.length) return null;
     const totalMin = ws.reduce((a, s) => a + s.durationMin, 0);
     const activeDays = new Set(ws.map(s => s.date)).size;
@@ -1263,16 +1270,53 @@
     const tail = topSlot[1] > totalMin * 0.4
       ? '你的节奏明显偏向「' + topSlot[0] + '」，可以把最重要的事尽量排在这个时段。'
       : '你的专注时段比较分散，试着固定一个每天不变的高效窗口，会更容易进入状态。';
-    return '过去 7 天，你在 ' + activeDays + ' 天里累计专注 ' + totalMin + ' 分钟（约 ' + hours + ' 小时），日均 ' + avg + ' 分钟，整体' + qWord + '（平均质量 ' + avgQ + ' 分）。最高产的是 ' + bestDayCN + '（' + bestMin + ' 分钟），最常投入的时段是「' + topSlot[0] + '」，主力落在「' + topCat[0] + '」类任务。' + tail;
+    const text = '过去 7 天，你在 ' + activeDays + ' 天里累计专注 ' + totalMin + ' 分钟（约 ' + hours + ' 小时），日均 ' + avg + ' 分钟，整体' + qWord + '（平均质量 ' + avgQ + ' 分）。最高产的是 ' + bestDayCN + '（' + bestMin + ' 分钟），最常投入的时段是「' + topSlot[0] + '」，主力落在「' + topCat[0] + '」类任务。' + tail;
+
+    // 本地洞察：环比上周 / 分心趋势 / 节奏
+    const prevDays = [];
+    for (let i = 13; i >= 7; i--) prevDays.push(addDays(today, -i));
+    const inPrev = s => prevDays.includes(s.date);
+    const prevWs = app.data.sessions.filter(s => inPrev(s) && (s.durationMin || 0) > 0);
+    const prevMin = prevWs.reduce((a, s) => a + s.durationMin, 0);
+    const delta = totalMin - prevMin;
+    let trendChip;
+    if (prevMin === 0) trendChip = { label: '环比', value: '新起点', tone: 'neutral' };
+    else if (delta > 0) trendChip = { label: '环比上周', value: '▲ +' + delta + ' 分', tone: 'good' };
+    else if (delta < 0) trendChip = { label: '环比上周', value: '▼ ' + delta + ' 分', tone: 'warn' };
+    else trendChip = { label: '环比上周', value: '持平', tone: 'neutral' };
+
+    const avgDist = ws.reduce((a, s) => a + (s.distractions || 0), 0) / ws.length;
+    let distChip;
+    if (avgDist === 0) distChip = { label: '分心', value: '零分心', tone: 'good' };
+    else if (avgDist < 1) distChip = { label: '分心', value: '偶尔(' + (Math.round(avgDist * 10) / 10) + ')', tone: 'neutral' };
+    else distChip = { label: '分心', value: '偏多(' + (Math.round(avgDist * 10) / 10) + ')', tone: 'warn' };
+
+    const rhythmChip = topSlot[1] > totalMin * 0.4
+      ? { label: '节奏', value: '集中于' + topSlot[0], tone: 'good' }
+      : { label: '节奏', value: '较分散', tone: 'neutral' };
+
+    return {
+      text,
+      chips: [
+        trendChip,
+        { label: '最佳时段', value: topSlot[0], tone: 'good' },
+        distChip,
+        rhythmChip
+      ]
+    };
   }
 
   function renderWeekNarrative() {
     const el = $('#week-narrative');
     if (!el) return;
-    const text = buildWeekNarrative();
-    if (!text) { el.style.display = 'none'; return; }
+    const data = buildWeekNarrative();
+    if (!data) { el.style.display = 'none'; return; }
     el.style.display = '';
-    $('#week-narrative-text').textContent = text;
+    $('#week-narrative-text').textContent = data.text;
+    const ic = $('#week-insights');
+    if (ic) {
+      ic.innerHTML = data.chips.map(c => `<span class="insight-chip tone-${c.tone}"><b>${c.label}</b> ${c.value}</span>`).join('');
+    }
   }
 
   function renderMonthStats(year, month, filter) {
@@ -1446,6 +1490,9 @@
     initTimer();
     updateTimerControls();
     refresh();
+    checkAchievements(true);
+    renderGrowth();
+    renderAchievements();
 
     if (!skipped) {
       if (app.timer.mode === 'pomodoro' && app.timer.phase !== 'work') {
@@ -1465,6 +1512,117 @@
     if (min < 10) score += 10; // 短会话适度放宽
     return Math.max(0, Math.min(100, Math.round(score)));
   }
+
+  /* ---------- 游戏化：连续天数 / 等级 / 成就 ---------- */
+  // 连续专注天数：从今天往前数（今天还没专注则宽容地从昨天起算）
+  function computeStreak() {
+    const days = new Set(app.data.sessions.filter(s => (s.durationMin || 0) > 0).map(s => s.date));
+    if (!days.size) return 0;
+    let streak = 0;
+    let cursor = todayStr();
+    if (!days.has(cursor)) cursor = addDays(cursor, -1);
+    while (days.has(cursor)) {
+      streak++;
+      cursor = addDays(cursor, -1);
+    }
+    return streak;
+  }
+
+  function computeTotals() {
+    let totalMin = 0;
+    for (const s of app.data.sessions) totalMin += (s.durationMin || 0);
+    return { totalMin, totalSessions: app.data.sessions.length };
+  }
+
+  // 等级阈值（累计专注分钟），Lv1 起；超出 Lv10 后每 1200 分钟升一级
+  const LEVEL_XP = [0, 120, 360, 720, 1200, 1800, 2520, 3360, 4320, 5400];
+  function levelThreshold(lv) {
+    if (lv <= LEVEL_XP.length) return LEVEL_XP[lv - 1];
+    return LEVEL_XP[LEVEL_XP.length - 1] + (lv - LEVEL_XP.length) * 1200;
+  }
+  function computeLevel(totalMin) {
+    let level = 1;
+    for (let i = 0; i < LEVEL_XP.length; i++) if (totalMin >= LEVEL_XP[i]) level = i + 1;
+    if (totalMin >= LEVEL_XP[LEVEL_XP.length - 1]) {
+      level = LEVEL_XP.length + Math.floor((totalMin - LEVEL_XP[LEVEL_XP.length - 1]) / 1200);
+    }
+    const floor = levelThreshold(level);
+    const ceil = levelThreshold(level + 1);
+    return { level, cur: totalMin - floor, need: ceil - floor };
+  }
+
+  // 成就定义：check 基于本地数据判定，零成本零依赖
+  const ACHIEVEMENTS = [
+    { id: 'first_focus', emoji: '🎯', name: '初次专注', desc: '完成第一次专注', check: () => app.data.sessions.some(s => (s.durationMin || 0) > 0) },
+    { id: 'streak3', emoji: '🔥', name: '三日之约', desc: '连续专注 3 天', check: () => computeStreak() >= 3 },
+    { id: 'streak7', emoji: '🌟', name: '一周不断', desc: '连续专注 7 天', check: () => computeStreak() >= 7 },
+    { id: 'streak30', emoji: '💎', name: '月度冠军', desc: '连续专注 30 天', check: () => computeStreak() >= 30 },
+    { id: 'hour10', emoji: '⏳', name: '十小时', desc: '累计专注满 10 小时', check: () => computeTotals().totalMin >= 600 },
+    { id: 'hour50', emoji: '🌳', name: '专注森林', desc: '累计专注满 50 小时', check: () => computeTotals().totalMin >= 3000 },
+    { id: 'hour100', emoji: '🏔', name: '百分专注', desc: '累计专注满 100 小时', check: () => computeTotals().totalMin >= 6000 },
+    { id: 'deep90', emoji: '🧠', name: '深度沉浸', desc: '单次专注 ≥ 90 分钟', check: () => app.data.sessions.some(s => (s.durationMin || 0) >= 90) },
+    { id: 'perfect100', emoji: '✨', name: '满分时刻', desc: '单次专注质量分 100', check: () => app.data.sessions.some(s => (s.focusScore || 0) === 100) },
+    { id: 'week_full', emoji: '📅', name: '全勤一周', desc: '过去 7 天每天都有专注', check: () => { const t = todayStr(); const set = new Set(app.data.sessions.map(s => s.date)); for (let i = 0; i < 7; i++) if (!set.has(addDays(t, -i))) return false; return true; } },
+    { id: 'clean_day', emoji: '🍃', name: '心无旁骛', desc: '单日 ≥3 次专注且零分心', check: () => { const byDate = {}; app.data.sessions.forEach(s => { if (!byDate[s.date]) byDate[s.date] = { n: 0, d: 0 }; byDate[s.date].n++; byDate[s.date].d += (s.distractions || 0); }); return Object.values(byDate).some(o => o.n >= 3 && o.d === 0); } },
+    { id: 'early_bird', emoji: '🌅', name: '早起鸟', desc: '在 8:00 前开始过专注', check: () => app.data.sessions.some(s => { const h = s.startTime ? new Date(s.startTime).getHours() : 12; return h < 8; }) }
+  ];
+
+  function getUnlockedAchievements() {
+    return ACHIEVEMENTS.filter(a => { try { return a.check(); } catch (e) { return false; } }).map(a => a.id);
+  }
+
+  // 同步已解锁成就；toastNew=true 时对新增项弹 toast
+  function checkAchievements(toastNew) {
+    const stored = new Set(app.data.unlockedAchievements || []);
+    const before = stored.size;
+    const newly = [];
+    for (const a of ACHIEVEMENTS) {
+      if (a.check() && !stored.has(a.id)) { stored.add(a.id); newly.push(a); }
+    }
+    app.data.unlockedAchievements = Array.from(stored);
+    if (toastNew && newly.length) {
+      newly.forEach((a, i) => setTimeout(() => showToast('🎖 解锁成就：' + a.name + ' ' + a.emoji, 'success'), 400 + i * 350));
+      saveState();
+    } else if (app.data.unlockedAchievements.length !== before) {
+      saveState();
+    }
+    return newly;
+  }
+
+  function renderGrowth() {
+    const streak = computeStreak();
+    const { totalMin, totalSessions } = computeTotals();
+    const lv = computeLevel(totalMin);
+    const unlocked = getUnlockedAchievements().length;
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    set('growth-level', 'Lv.' + lv.level);
+    set('growth-streak', '🔥 连续 ' + streak + ' 天');
+    set('growth-total', '累计专注 ' + (Math.round(totalMin / 60 * 10) / 10) + ' 小时 · ' + totalSessions + ' 次');
+    set('growth-ach', '已解锁成就 ' + unlocked + ' / ' + ACHIEVEMENTS.length);
+    const bar = document.getElementById('growth-bar');
+    if (bar) {
+      const pct = lv.need ? Math.min(100, Math.max(0, Math.round(lv.cur / lv.need * 100))) : 100;
+      bar.style.width = pct + '%';
+    }
+    set('growth-bar-label', '距下一级还需 ' + Math.max(0, lv.need - lv.cur) + ' 分钟');
+  }
+
+  function renderAchievements() {
+    const grid = document.getElementById('ach-grid');
+    const count = document.getElementById('ach-count');
+    if (!grid) return;
+    const unlocked = new Set(getUnlockedAchievements());
+    if (count) count.textContent = unlocked.size + ' / ' + ACHIEVEMENTS.length;
+    grid.innerHTML = ACHIEVEMENTS.map(a => {
+      const on = unlocked.has(a.id);
+      return `<div class="ach-item${on ? '' : ' locked'}" title="${escapeHtml(a.desc)}">
+        <div class="ach-emoji">${on ? a.emoji : '🔒'}</div>
+        <div class="ach-name">${escapeHtml(a.name)}</div>
+        <div class="ach-desc">${escapeHtml(a.desc)}</div>
+      </div>`;
+    }).join('');
+  }
+
 
   function qualityIcon(score) {
     if (score >= 85) return '🟢';
@@ -2851,6 +3009,7 @@
     initReplan();
     initShield();
     initDistractionSettings();
+    checkAchievements(false);
 
     // 智能整理：若有过期/遗留任务，轻提示
     const pendingReplan = computeReplanSuggestions();
