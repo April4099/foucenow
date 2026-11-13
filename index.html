@@ -467,18 +467,19 @@
           </div>
 
           <!-- 皮肤主题 -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>🎨 皮肤主题</h3>
-              <span class="sub">选择你喜欢的配色风格</span>
+          <div class="settings-section" id="sec-theme" data-collapse="1">
+            <div class="settings-section-header" data-toggle="sec-theme">
+              <div class="ssh-text"><h3>🎨 皮肤主题</h3><span class="sub">选择你喜欢的配色风格</span></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <div class="theme-bar" id="theme-bar"></div>
           </div>
 
           <!-- 基本设置 -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>⚙️ 基本设置</h3>
+          <div class="settings-section" id="sec-basic" data-collapse="1">
+            <div class="settings-section-header" data-toggle="sec-basic">
+              <div class="ssh-text"><h3>⚙️ 基本设置</h3></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <div class="settings-list">
               <div class="setting-row">
@@ -545,10 +546,10 @@
           </div>
 
           <!-- 分心应用 -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>🚫 分心应用</h3>
-              <span class="sub">专注时若切到这些软件，记为一次分心</span>
+          <div class="settings-section" id="sec-distraction" data-collapse="1">
+            <div class="settings-section-header" data-toggle="sec-distraction">
+              <div class="ssh-text"><h3>🚫 分心应用</h3><span class="sub">专注时若切到这些软件，记为一次分心</span></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <p class="setting-hint">按进程名子串匹配，不区分大小写。做文件（Word/Excel 等）不会算分心，刷微信/浏览器等才记。仅桌面端 Windows 生效。</p>
             <div class="distraction-presets" id="distraction-presets"></div>
@@ -560,10 +561,10 @@
           </div>
 
           <!-- 桌面宠物 -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>🐾 桌面宠物</h3>
-              <span class="sub">一只常驻桌面的小监督，看着你专注（零隐私，只看前台应用）</span>
+          <div class="settings-section" id="sec-pet" data-collapse="1" data-default-collapsed="1">
+            <div class="settings-section-header" data-toggle="sec-pet">
+              <div class="ssh-text"><h3>🐾 桌面宠物</h3><span class="sub">一只常驻桌面的小监督，看着你专注（零隐私，只看前台应用）</span></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <div class="settings-list">
               <div class="setting-row">
@@ -589,10 +590,10 @@
           </div>
 
           <!-- 视觉观测助手（可选，需自带 API） -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>👁️ 视觉观测助手</h3>
-              <span class="sub">可选 · 让助手真的"看到"桌面，用你自己的大模型 key</span>
+          <div class="settings-section" id="sec-vision" data-collapse="1" data-default-collapsed="1">
+            <div class="settings-section-header" data-toggle="sec-vision">
+              <div class="ssh-text"><h3>👁️ 视觉观测助手</h3><span class="sub">可选 · 让助手真的"看到"桌面，用你自己的大模型 key</span></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <div class="settings-list">
               <div class="setting-row">
@@ -636,10 +637,10 @@
           </div>
 
           <!-- 程序控制 -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>🔌 程序控制</h3>
-              <span class="sub">✕ 关闭只是挂后台，⏻ 才会完全退出</span>
+          <div class="settings-section" id="sec-programs" data-collapse="1" data-default-collapsed="1">
+            <div class="settings-section-header" data-toggle="sec-programs">
+              <div class="ssh-text"><h3>🔌 程序控制</h3><span class="sub">✕ 关闭只是挂后台，⏻ 才会完全退出</span></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <div class="settings-list">
               <div class="setting-row">
@@ -660,9 +661,10 @@
           </div>
 
           <!-- 软件使用须知 -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>📋 软件使用须知</h3>
+          <div class="settings-section" id="sec-notice" data-collapse="1">
+            <div class="settings-section-header" data-toggle="sec-notice">
+              <div class="ssh-text"><h3>📋 软件使用须知</h3></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <div class="notice-card">
               <div class="notice-highlight">
@@ -682,16 +684,17 @@
               </ul>
               <div class="notice-version">
                 <span>当前版本</span>
-                <strong id="app-version">v1.5.2</strong>
+                <strong id="app-version">—</strong>
                 <button class="btn-secondary btn-sm" id="btn-check-update">检查更新</button>
               </div>
             </div>
           </div>
 
           <!-- 数据管理 -->
-          <div class="settings-section">
-            <div class="settings-section-header">
-              <h3>💾 数据管理</h3>
+          <div class="settings-section" id="sec-data" data-collapse="1" data-default-collapsed="1">
+            <div class="settings-section-header" data-toggle="sec-data">
+              <div class="ssh-text"><h3>💾 数据管理</h3></div>
+              <span class="sec-chevron">▾</span>
             </div>
             <div class="settings-list">
               <div class="setting-row">

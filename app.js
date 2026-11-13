@@ -2688,6 +2688,30 @@
     bindVisionField('#pet-vision-exclude', 'exclude', false);
   }
 
+  /* 设置分区折叠：默认折叠高级/次要分区，状态持久化到 localStorage */
+  function initSettingsCollapse() {
+    const KEY = 'fn_settings_collapsed';
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { saved = null; }
+    const sections = document.querySelectorAll('.settings-section[data-collapse]');
+    sections.forEach(sec => {
+      const id = sec.id;
+      const def = sec.dataset.defaultCollapsed === '1';
+      const collapsed = (saved && Array.isArray(saved.closed)) ? (saved.closed.indexOf(id) !== -1) : def;
+      sec.classList.toggle('collapsed', collapsed);
+      const header = sec.querySelector('.settings-section-header');
+      if (!header) return;
+      header.addEventListener('click', () => {
+        const nowCollapsed = !sec.classList.contains('collapsed');
+        sec.classList.toggle('collapsed', nowCollapsed);
+        const closed = Array.prototype.slice
+          .call(document.querySelectorAll('.settings-section[data-collapse].collapsed'))
+          .map(s => s.id);
+        try { localStorage.setItem(KEY, JSON.stringify({ closed })); } catch (e) { /* ignore */ }
+      });
+    });
+  }
+
   function initFloatingWidget() {
     const widget = $('#floating-timer');
     const ball = $('#floating-ball');
@@ -2998,7 +3022,9 @@
     const updateCtx = { version: '' };
 
     function renderModal(opts) {
-      notesEl.textContent = (opts.notes && opts.notes.trim()) ? opts.notes : '（未提供更新说明）';
+      notesEl.textContent = (opts.notes && opts.notes.trim())
+        ? opts.notes
+        : ('v' + (opts.version || '') + ' 已就绪，包含若干体验优化与稳定性修复，点「立即更新」即可升级。');
       if (opts.mode === 'available') {
         iconEl.textContent = '⬆️';
         titleEl.textContent = '发现新版本';
@@ -3137,6 +3163,7 @@
     initDistractionSettings();
     initPet();
     initPetSettings();
+    initSettingsCollapse();
     checkAchievements(false);
 
     // 智能整理：若有过期/遗留任务，轻提示

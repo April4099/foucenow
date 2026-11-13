@@ -49,6 +49,15 @@
     box-shadow: 0 0 8px #FF2E7E; animation: petPulse 1.1s infinite;
   }
   @keyframes petPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.7); } }
+  @keyframes petBounce {
+    0%   { transform: translateY(0) scale(1); }
+    25%  { transform: translateY(-16px) scale(1.08); }
+    45%  { transform: translateY(0) scale(0.95); }
+    65%  { transform: translateY(-7px) scale(1.03); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  #pet-creature { cursor: pointer; }
+  #pet-creature.petted { animation: petBounce 0.62s cubic-bezier(.28,.84,.42,1); }
 </style>
 </head>
 <body>

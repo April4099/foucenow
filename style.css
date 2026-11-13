@@ -2003,13 +2003,25 @@ body {
   box-shadow: var(--card-shadow), inset 0 1px 0 rgba(255,255,255,0.03);
 }
 .settings-section-header {
-  display: flex; align-items: baseline; gap: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
   margin-bottom: 18px; padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+  transition: opacity 0.18s;
 }
+.settings-section-header:hover { opacity: 0.9; }
+.ssh-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .settings-section-header h3 {
   margin: 0; font-size: 1.05rem; font-weight: 700;
 }
+.sec-chevron {
+  flex-shrink: 0; margin-left: 14px;
+  color: var(--text-secondary); font-size: 0.95rem; line-height: 1;
+  transition: transform 0.25s ease;
+}
+.settings-section.collapsed .sec-chevron { transform: rotate(-90deg); }
+.settings-section.collapsed .settings-section-header { margin-bottom: 0; }
+.settings-section.collapsed > *:not(.settings-section-header) { display: none; }
 
 .settings-list {
   display: flex; flex-direction: column; gap: 4px;

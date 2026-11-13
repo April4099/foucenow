@@ -357,14 +357,24 @@ function checkForUpdates() {
 /* ========== 把 release notes 整理成可读文本 ========== */
 function formatNotes(info) {
   let notes = info && info.releaseNotes;
-  if (!notes) return '（未提供更新说明）';
+  if (!notes) return '';
   if (Array.isArray(notes)) {
-    notes = notes.map(n => (typeof n === 'string' ? n : (n && n.notes) || '')).join('\n');
+    notes = notes.map(n => (typeof n === 'string' ? n : (n && n.notes) || '')).join('\n\n');
   }
-  notes = String(notes).trim();
-  if (!notes) return '（未提供更新说明）';
-  notes = notes.replace(/\n{3,}/g, '\n\n'); // 压缩多余空行
-  if (notes.length > 1200) notes = notes.slice(0, 1200) + '\n…（内容过长，完整说明见官网 Release）';
+  notes = String(notes || '').trim();
+  if (!notes) return '';
+  // 去掉任何 HTML 标签（GitHub 返回的说明可能夹带 <pr> / <br> / <p> 等裸标签，避免原样显示）
+  notes = notes.replace(/<[^>]+>/g, '');
+  // 解码常见 HTML 实体
+  notes = notes
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+  // 还原 bash 转义残留的字面 \n（反斜杠 + n）为真实换行
+  notes = notes.replace(/\\n/g, '\n');
+  // 压缩多余空行
+  notes = notes.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (notes.length > 1400) notes = notes.slice(0, 1400) + '\n…（完整说明见 GitHub Release）';
   return notes;
 }
 

@@ -137,4 +137,20 @@
   document.getElementById('pet-close').addEventListener('click', () => {
     if (api && api.closePet) api.closePet();
   });
+
+  /* 点击抚摸：弹跳动效 + 随机可爱回应（用 pointer 位移判定，避免拖动窗口误触） */
+  const PET_LINES = ['谢谢你陪我 💕', '摸摸头~ 干劲满满！', '有你在真好 ✨', '最喜欢你了 🐾', '加油，我帮你盯着！', '嘿嘿，被你发现啦 😸'];
+  let petDownX = 0, petDownY = 0;
+  function petPet() {
+    creatureEl.classList.remove('petted');
+    void creatureEl.offsetWidth; // 触发重排以重启动画
+    creatureEl.classList.add('petted');
+    showBubble(PET_LINES[Math.floor(Math.random() * PET_LINES.length)], true);
+  }
+  creatureEl.addEventListener('pointerdown', e => { petDownX = e.clientX; petDownY = e.clientY; });
+  creatureEl.addEventListener('pointerup', e => {
+    const dx = e.clientX - petDownX, dy = e.clientY - petDownY;
+    if (Math.hypot(dx, dy) < 8) petPet();
+  });
+  creatureEl.addEventListener('animationend', () => creatureEl.classList.remove('petted'));
 })();
