@@ -121,13 +121,7 @@
         pomodoroLongBreak: 15,
         pomodorosUntilLongBreak: 4,
         dailyFocusGoal: 120,
-        soundEnabled: true,
-        pet: {
-          autoShow: false,
-          style: 'cat',
-          customPath: '',
-          vision: { enabled: false, endpoint: '', apiKey: '', model: '', intervalSec: 30, exclude: '银行, 网银, 隐私, incognito, 无痕, 密码' }
-        }
+        soundEnabled: true
       }
     };
   }
@@ -169,10 +163,8 @@
   if (!Array.isArray(app.data.unlockedAchievements)) {
     app.data.unlockedAchievements = [];
   }
-  // 迁移：老数据可能没有 settings.pet（桌宠 + 视觉观测配置）
+  // 迁移：确保 settings 存在
   if (!app.data.settings) app.data.settings = defaultData().settings;
-  if (!app.data.settings.pet) app.data.settings.pet = defaultData().settings.pet;
-  if (!app.data.settings.pet.vision) app.data.settings.pet.vision = defaultData().settings.pet.vision;
 
   /* ---------- 音效 ---------- */
   let audioCtx = null;
@@ -1400,7 +1392,6 @@
     if (window.electronAPI && window.electronAPI.startFocusMonitor) {
       window.electronAPI.startFocusMonitor(app.data.distractionApps || []);
     }
-    sendPetSync();
 
     if (app.timer.mode === 'stopwatch') {
       app.timer.intervalId = setInterval(() => { app.timer.remaining++; updateTimerDisplay(); }, 1000);
@@ -1426,7 +1417,6 @@
     clearInterval(app.timer.intervalId);
     app.timer.intervalId = null;
     if (window.electronAPI && window.electronAPI.stopFocusMonitor) window.electronAPI.stopFocusMonitor();
-    sendPetSync();
     updateTimerControls();
   }
 
@@ -1450,7 +1440,6 @@
   function timerComplete(skipped) {
     closeShieldIfOpen();
     if (window.electronAPI && window.electronAPI.stopFocusMonitor) window.electronAPI.stopFocusMonitor();
-    sendPetSync();
     if (!skipped) playCompleteSound();
 
     const focusPhases = ['work', 'custom', 'stopwatch'];
@@ -1672,7 +1661,6 @@
       window.electronAPI.onFocusDistraction(() => {
         if (app.timer.running && isFocusPhase() && !app.shieldActive) {
           bumpDistraction();
-          sendPetSync();
         }
       });
     }
@@ -2317,7 +2305,6 @@
       if (window.electronAPI && window.electronAPI.setDistractionApps) {
         window.electronAPI.setDistractionApps(app.data.distractionApps || []);
       }
-      sendPetSync(); // 分心名单变化也同步给桌宠（影响"摸鱼"判定）
     };
 
     const render = () => {
@@ -2595,99 +2582,6 @@
     }
   }
 
-  /* ---------- 桌面宠物 ---------- */
-  let petWindowOpen = false;
-
-  function initPet() {
-    const btn = $('#btn-pet-toggle');
-    const setAuto = $('#pet-autoshow');
-    if (setAuto) setAuto.checked = !!app.data.settings.pet.autoShow;
-    if (btn) {
-      btn.addEventListener('click', () => {
-        if (!window.electronAPI || !window.electronAPI.openPet) {
-          showToast('桌宠仅桌面端可用（打包后的应用）', 'info');
-          return;
-        }
-        if (petWindowOpen) window.electronAPI.closePet();
-        else window.electronAPI.openPet();
-      });
-    }
-    if (window.electronAPI && window.electronAPI.onPetWindowState) {
-      window.electronAPI.onPetWindowState(open => {
-        petWindowOpen = open;
-        if (btn) btn.classList.toggle('active', open);
-      });
-    }
-    // 桌宠启动后向主窗口索要最新状态
-    if (window.electronAPI && window.electronAPI.onPetRequestState) {
-      window.electronAPI.onPetRequestState(() => sendPetSync());
-    }
-    // 启动时按设置自动显示桌宠
-    if (app.data.settings.pet.autoShow && window.electronAPI && window.electronAPI.openPet) {
-      window.electronAPI.openPet();
-    }
-  }
-
-  function initPetSettings() {
-    const styleBtns = document.querySelectorAll('.pet-style-btn');
-    styleBtns.forEach(b => {
-      if (b.dataset.style === app.data.settings.pet.style) b.classList.add('active');
-      b.addEventListener('click', () => {
-        app.data.settings.pet.style = b.dataset.style;
-        styleBtns.forEach(x => x.classList.remove('active'));
-        b.classList.add('active');
-        saveState();
-        sendPetSync();
-        showToast('桌宠形象已切换', 'success');
-      });
-    });
-    const fileInput = $('#pet-custom-file');
-    if (fileInput) {
-      fileInput.addEventListener('change', () => {
-        const f = fileInput.files && fileInput.files[0];
-        if (!f) return;
-        if (f.size > 2 * 1024 * 1024) { showToast('图片需小于 2MB', 'warning'); return; }
-        const reader = new FileReader();
-        reader.onload = () => {
-          app.data.settings.pet.customPath = reader.result;
-          app.data.settings.pet.style = 'custom';
-          styleBtns.forEach(x => x.classList.toggle('active', x.dataset.style === 'custom'));
-          saveState();
-          sendPetSync();
-          showToast('自定义桌宠已应用', 'success');
-        };
-        reader.readAsDataURL(f);
-      });
-    }
-    const auto = $('#pet-autoshow');
-    if (auto) auto.addEventListener('change', () => { app.data.settings.pet.autoShow = auto.checked; saveState(); });
-
-    // 视觉观测助手（可选，需用户自带 key）
-    const vEnabled = $('#pet-vision-enabled');
-    if (vEnabled) {
-      vEnabled.checked = !!app.data.settings.pet.vision.enabled;
-      vEnabled.addEventListener('change', () => {
-        app.data.settings.pet.vision.enabled = vEnabled.checked;
-        saveState(); sendPetSync();
-        if (vEnabled.checked) showToast('视觉观测已开启：截图仅发往你自己的接口', 'info');
-      });
-    }
-    const bindVisionField = (sel, key, isNum) => {
-      const el = $(sel);
-      if (!el) return;
-      if (!isNum) el.value = app.data.settings.pet.vision[key] || '';
-      el.addEventListener('change', () => {
-        app.data.settings.pet.vision[key] = isNum ? (parseInt(el.value, 10) || 0) : el.value;
-        saveState(); sendPetSync();
-      });
-    };
-    bindVisionField('#pet-vision-endpoint', 'endpoint', false);
-    bindVisionField('#pet-vision-key', 'apiKey', false);
-    bindVisionField('#pet-vision-model', 'model', false);
-    bindVisionField('#pet-vision-interval', 'intervalSec', true);
-    bindVisionField('#pet-vision-exclude', 'exclude', false);
-  }
-
   /* 设置分区折叠：默认折叠高级/次要分区，状态持久化到 localStorage */
   function initSettingsCollapse() {
     const KEY = 'fn_settings_collapsed';
@@ -2943,24 +2837,6 @@
     }
   }
 
-  /* 把运行时状态 + 桌宠/视觉配置同步给桌宠窗口（经由主进程中继） */
-  function buildPetSync() {
-    const t = app.timer;
-    return {
-      running: !!t.running,
-      phase: t.phase,
-      distractions: t.distractions || 0,
-      shieldActive: !!app.shieldActive,
-      distractionApps: app.data.distractionApps || [],
-      pet: app.data.settings.pet
-    };
-  }
-  function sendPetSync() {
-    if (window.electronAPI && window.electronAPI.sendPetSync) {
-      window.electronAPI.sendPetSync(buildPetSync());
-    }
-  }
-
   /* ==========================================
      窗口控制（✕ 关闭挂后台 / ⏻ 完全退出）
      ========================================== */
@@ -3161,8 +3037,6 @@
     initReplan();
     initShield();
     initDistractionSettings();
-    initPet();
-    initPetSettings();
     initSettingsCollapse();
     checkAchievements(false);
 

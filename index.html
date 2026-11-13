@@ -176,9 +176,6 @@
               <div class="growth-bar-wrap"><div class="growth-bar" id="growth-bar"></div></div>
               <div class="growth-bar-label" id="growth-bar-label">距下一级还需 0 分钟</div>
               <div class="growth-ach" id="growth-ach">已解锁成就 0 / 0</div>
-              <button class="pet-summon-btn" id="btn-pet-toggle">
-                <span>🐾 召唤桌宠</span>
-              </button>
             </div>
 
             <!-- 专注目标 -->
@@ -560,82 +557,6 @@
             </div>
           </div>
 
-          <!-- 桌面宠物 -->
-          <div class="settings-section" id="sec-pet" data-collapse="1" data-default-collapsed="1">
-            <div class="settings-section-header" data-toggle="sec-pet">
-              <div class="ssh-text"><h3>🐾 桌面宠物</h3><span class="sub">一只常驻桌面的小监督，看着你专注（零隐私，只看前台应用）</span></div>
-              <span class="sec-chevron">▾</span>
-            </div>
-            <div class="settings-list">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <span class="setting-label">🚀 随软件启动自动显示</span>
-                  <span class="setting-desc">打开 FocusNow 时自动召唤桌宠</span>
-                </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="pet-autoshow">
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-            <p class="setting-hint">选择桌宠形象：</p>
-            <div class="pet-style-row">
-              <button class="pet-style-btn" data-style="cat">🐱 代码小猫</button>
-              <button class="pet-style-btn" data-style="emoji">😺 Emoji</button>
-              <button class="pet-style-btn" data-style="custom">🖼️ 自定义图片</button>
-            </div>
-            <div class="pet-custom-add">
-              <input type="file" id="pet-custom-file" accept="image/*">
-            </div>
-          </div>
-
-          <!-- 视觉观测助手（可选，需自带 API） -->
-          <div class="settings-section" id="sec-vision" data-collapse="1" data-default-collapsed="1">
-            <div class="settings-section-header" data-toggle="sec-vision">
-              <div class="ssh-text"><h3>👁️ 视觉观测助手</h3><span class="sub">可选 · 让助手真的"看到"桌面，用你自己的大模型 key</span></div>
-              <span class="sec-chevron">▾</span>
-            </div>
-            <div class="settings-list">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <span class="setting-label">🔓 启用视觉观测</span>
-                  <span class="setting-desc">开启后助手会按间隔截图并发往你填写的接口（默认关）</span>
-                </div>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="pet-vision-enabled">
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-            <p class="setting-hint warning">
-              ⚠️ 隐私提示：开启后截图会<strong>发送到你自己的接口</strong>（如 OpenAI / 通义 / GLM 等兼容端点），不经过我们的服务器、也不会被保存。请仅在使用自有 key 时开启，并留意屏幕上的敏感内容。
-            </p>
-            <div class="vision-fields">
-              <label class="vision-field">
-                <span>接口地址（Chat/Images 兼容）</span>
-                <input type="text" id="pet-vision-endpoint" placeholder="https://api.openai.com/v1/chat/completions">
-              </label>
-              <label class="vision-field">
-                <span>API Key</span>
-                <input type="password" id="pet-vision-key" placeholder="sk-...">
-              </label>
-              <label class="vision-field">
-                <span>模型名（需支持视觉）</span>
-                <input type="text" id="pet-vision-model" placeholder="gpt-4o / qwen-vl / glm-4v 等">
-              </label>
-              <div class="vision-field-row">
-                <label class="vision-field">
-                  <span>截图间隔（秒）</span>
-                  <input type="number" id="pet-vision-interval" value="30" min="10" max="300" step="5">
-                </label>
-              </div>
-              <label class="vision-field">
-                <span>排除关键词（标题命中则跳过截图，逗号分隔）</span>
-                <input type="text" id="pet-vision-exclude" placeholder="银行, 网银, 隐私, incognito, 无痕, 密码">
-              </label>
-            </div>
-          </div>
-
           <!-- 程序控制 -->
           <div class="settings-section" id="sec-programs" data-collapse="1" data-default-collapsed="1">
             <div class="settings-section-header" data-toggle="sec-programs">
@@ -680,7 +601,6 @@
                 <li>🌐 不需要联网，不追踪任何使用行为</li>
                 <li>💾 清除应用数据会同时清除本软件数据，请注意备份</li>
                 <li>🔄 联网时自动检查更新（由你确认后安装），数据永不上传</li>
-                <li>👁️ 「视觉观测」为可选功能，默认关闭；开启后桌面截图<strong>仅发送到你本人填写的模型接口</strong>，不经过任何第三方、不被本软件保存</li>
               </ul>
               <div class="notice-version">
                 <span>当前版本</span>
