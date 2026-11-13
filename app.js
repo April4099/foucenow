@@ -113,6 +113,7 @@
       todos: [],
       events: [],
       sessions: [],
+      distractionApps: ['wechat', 'chrome', 'msedge', 'firefox', 'steam', 'douyin', 'bilibili'],
       settings: {
         pomodoroWork: 25,
         pomodoroShortBreak: 5,
@@ -152,6 +153,11 @@
     },
     shieldActive: false
   };
+
+  // 迁移：老数据可能没有 distractionApps 字段
+  if (!Array.isArray(app.data.distractionApps)) {
+    app.data.distractionApps = ['wechat', 'chrome', 'msedge', 'firefox', 'steam', 'douyin', 'bilibili'];
+  }
 
   /* ---------- 音效 ---------- */
   let audioCtx = null;
@@ -1335,6 +1341,11 @@
     app.timer.startedAt = new Date().toISOString();
     app.timer.distractions = 0;
     app.timer.pauses = 0;
+    updateLiveDistractions();
+    // 启动前台「分心应用」监控（仅桌面端 Windows 生效）
+    if (window.electronAPI && window.electronAPI.startFocusMonitor) {
+      window.electronAPI.startFocusMonitor(app.data.distractionApps || []);
+    }
 
     if (app.timer.mode === 'stopwatch') {
       app.timer.intervalId = setInterval(() => { app.timer.remaining++; updateTimerDisplay(); }, 1000);
@@ -1359,6 +1370,7 @@
     app.timer.running = false;
     clearInterval(app.timer.intervalId);
     app.timer.intervalId = null;
+    if (window.electronAPI && window.electronAPI.stopFocusMonitor) window.electronAPI.stopFocusMonitor();
     updateTimerControls();
   }
 
@@ -1381,6 +1393,7 @@
 
   function timerComplete(skipped) {
     closeShieldIfOpen();
+    if (window.electronAPI && window.electronAPI.stopFocusMonitor) window.electronAPI.stopFocusMonitor();
     if (!skipped) playCompleteSound();
 
     const focusPhases = ['work', 'custom', 'stopwatch'];
@@ -1464,18 +1477,42 @@
   function initFocusQuality() {
     const isFocusPhase = () => ['work', 'custom', 'stopwatch'].includes(app.timer.phase);
     let lastHidden = false;
+    const bumpDistraction = () => {
+      app.timer.distractions = (app.timer.distractions || 0) + 1;
+      updateLiveDistractions();
+    };
     window.addEventListener('blur', () => {
-      if (app.timer.running && isFocusPhase() && !app.shieldActive) {
-        app.timer.distractions = (app.timer.distractions || 0) + 1;
+      // 悬浮钟模式下用户本就在用其他软件干活，切窗口是设计内的事，不计分心
+      if (app.timer.running && isFocusPhase() && !app.shieldActive && !floatWindowOpen) {
+        bumpDistraction();
       }
     });
     document.addEventListener('visibilitychange', () => {
       if (document.hidden === lastHidden) return;
       lastHidden = document.hidden;
-      if (document.hidden && app.timer.running && isFocusPhase() && !app.shieldActive) {
-        app.timer.distractions = (app.timer.distractions || 0) + 1;
+      // 悬浮钟模式下隐藏主窗口不算分心；仅普通模式（人坐在本软件却切走）与护盾模式计数
+      if (document.hidden && app.timer.running && isFocusPhase() && !app.shieldActive && !floatWindowOpen) {
+        bumpDistraction();
       }
     });
+    // 前台「分心应用」检测（来自主进程的 focus-distraction 事件）
+    // 注意：该信号在悬浮钟模式下也计分心——做文件不被冤枉，但真去刷微信/浏览器仍算
+    if (window.electronAPI && window.electronAPI.onFocusDistraction) {
+      window.electronAPI.onFocusDistraction(() => {
+        if (app.timer.running && isFocusPhase() && !app.shieldActive) {
+          bumpDistraction();
+        }
+      });
+    }
+  }
+
+  // 专注页实时「本次分心」提示（随分心次数刷新）
+  function updateLiveDistractions() {
+    const el = document.getElementById('live-distractions');
+    if (!el) return;
+    const n = app.timer.distractions || 0;
+    el.textContent = n > 0 ? `本次分心 ${n} 次` : '';
+    el.classList.toggle('active', n > 0);
   }
 
   function updateTimerDisplay() {
@@ -2082,6 +2119,83 @@
         }
       }
     });
+  }
+
+  /* ==========================================
+     分心应用名单（专注时前台检测）
+     ========================================== */
+  function initDistractionSettings() {
+    const PRESETS = [
+      { key: 'wechat', label: '微信' },
+      { key: 'qq', label: 'QQ' },
+      { key: 'chrome', label: 'Chrome' },
+      { key: 'msedge', label: 'Edge' },
+      { key: 'firefox', label: 'Firefox' },
+      { key: 'steam', label: 'Steam' },
+      { key: 'douyin', label: '抖音' },
+      { key: 'bilibili', label: 'B站' }
+    ];
+    const presetKeys = PRESETS.map(p => p.key);
+    const presetsEl = document.getElementById('distraction-presets');
+    const customEl = document.getElementById('distraction-custom');
+    const inputEl = document.getElementById('distraction-input');
+    const addBtn = document.getElementById('distraction-add-btn');
+
+    const syncToMain = () => {
+      if (window.electronAPI && window.electronAPI.setDistractionApps) {
+        window.electronAPI.setDistractionApps(app.data.distractionApps || []);
+      }
+    };
+
+    const render = () => {
+      const list = app.data.distractionApps || [];
+      if (presetsEl) {
+        presetsEl.innerHTML = PRESETS.map(p => {
+          const on = list.includes(p.key);
+          return `<button type="button" class="distraction-chip${on ? ' active' : ''}" data-key="${p.key}">${p.label}${on ? ' ✓' : ''}</button>`;
+        }).join('');
+      }
+      if (customEl) {
+        const custom = list.filter(k => !presetKeys.includes(k));
+        customEl.innerHTML = custom.length
+          ? custom.map(k => `<span class="distraction-custom-item" data-key="${escapeHtml(k)}">${escapeHtml(k)}<button type="button" class="distraction-remove" data-key="${escapeHtml(k)}" title="移除">×</button></span>`).join('')
+          : '<span class="distraction-empty">（暂无自定义）</span>';
+      }
+    };
+
+    const togglePreset = (key) => {
+      const list = app.data.distractionApps || [];
+      const i = list.indexOf(key);
+      if (i >= 0) list.splice(i, 1); else list.push(key);
+      app.data.distractionApps = list;
+      saveState(); render(); syncToMain();
+    };
+    const removeCustom = (key) => {
+      app.data.distractionApps = (app.data.distractionApps || []).filter(k => k !== key);
+      saveState(); render(); syncToMain();
+    };
+    const addCustom = () => {
+      const v = (inputEl.value || '').trim().toLowerCase();
+      if (!v) return;
+      const list = app.data.distractionApps || [];
+      if (!list.includes(v)) { list.push(v); app.data.distractionApps = list; saveState(); }
+      inputEl.value = '';
+      render(); syncToMain();
+    };
+
+    if (presetsEl) presetsEl.addEventListener('click', e => {
+      const b = e.target.closest('[data-key]');
+      if (b) togglePreset(b.getAttribute('data-key'));
+    });
+    if (customEl) customEl.addEventListener('click', e => {
+      const b = e.target.closest('.distraction-remove');
+      if (b) removeCustom(b.getAttribute('data-key'));
+    });
+    if (addBtn) addBtn.addEventListener('click', addCustom);
+    if (inputEl) inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') addCustom(); });
+
+    render();
+    syncToMain();
   }
 
   /* ==========================================
@@ -2736,6 +2850,7 @@
     initFocusQuality();
     initReplan();
     initShield();
+    initDistractionSettings();
 
     // 智能整理：若有过期/遗留任务，轻提示
     const pendingReplan = computeReplanSuggestions();

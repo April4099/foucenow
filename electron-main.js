@@ -184,6 +184,77 @@ ipcMain.handle('close-shield', () => {
   return { status: 'closed' };
 });
 
+/* ========== 前台「分心应用」检测（Windows 专用） ========== */
+let fgMonitor = { active: false, apps: [], timer: null, lastDistract: false };
+
+function buildFgScript() {
+  // 取前台窗口所属进程名（PowerShell P/Invoke，base64 编码避免引号转义问题）
+  const script = [
+    'Add-Type @"',
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public class FgApi {',
+    '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();',
+    '  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);',
+    '}',
+    '"@',
+    '$p = 0u;',
+    '[FgApi]::GetWindowThreadProcessId([FgApi]::GetForegroundWindow(), [ref]$p) | Out-Null;',
+    '(Get-Process -Id $p).ProcessName'
+  ].join('\n');
+  return Buffer.from(script, 'utf16le').toString('base64');
+}
+
+function queryForegroundProcess() {
+  if (process.platform !== 'win32') return Promise.resolve(null);
+  const b64 = buildFgScript();
+  const cp = require('child_process');
+  return new Promise((resolve) => {
+    cp.execFile('powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-EncodedCommand', b64],
+      { windowsHide: true, timeout: 6000, maxBuffer: 64 * 1024 },
+      (err, stdout) => {
+        if (err) { resolve(null); return; }
+        const name = (stdout || '').toString().trim().toLowerCase();
+        resolve(name || null);
+      });
+  });
+}
+
+async function tickFg() {
+  const name = await queryForegroundProcess();
+  if (!name) { fgMonitor.lastDistract = false; return; }
+  const isDistract = fgMonitor.apps.some(a => name.indexOf(String(a).toLowerCase()) !== -1);
+  // 边沿触发：连续停留在分心应用只记 1 次；离开后再进入再记 1 次
+  if (isDistract && !fgMonitor.lastDistract) {
+    fgMonitor.lastDistract = true;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('focus-distraction');
+  } else if (!isDistract) {
+    fgMonitor.lastDistract = false;
+  }
+}
+
+function startFgMonitor(apps) {
+  fgMonitor.apps = (apps || []).map(a => String(a).toLowerCase());
+  fgMonitor.active = true;
+  fgMonitor.lastDistract = false;
+  if (fgMonitor.timer) clearInterval(fgMonitor.timer);
+  fgMonitor.timer = setInterval(tickFg, 3000);
+}
+
+function stopFgMonitor() {
+  fgMonitor.active = false;
+  fgMonitor.lastDistract = false;
+  if (fgMonitor.timer) { clearInterval(fgMonitor.timer); fgMonitor.timer = null; }
+}
+
+ipcMain.handle('focus-monitor-start', (e, apps) => { startFgMonitor(apps); return { status: 'started' }; });
+ipcMain.handle('focus-monitor-stop', () => { stopFgMonitor(); return { status: 'stopped' }; });
+ipcMain.handle('focus-monitor-set-apps', (e, apps) => {
+  fgMonitor.apps = (apps || []).map(a => String(a).toLowerCase());
+  return { status: 'set' };
+});
+
 /* ========== 更新检查 ========== */
 function checkForUpdates() {
   // 开发模式不检查更新

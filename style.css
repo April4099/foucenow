@@ -2031,6 +2031,59 @@ body {
   font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;
 }
 
+/* 分心应用名单 */
+.setting-hint {
+  font-size: 0.78rem; color: var(--text-secondary); line-height: 1.6;
+  margin: -6px 0 14px; padding: 10px 12px;
+  background: var(--bg-soft); border-radius: 10px;
+  border-left: 3px solid var(--primary);
+}
+.distraction-presets {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+}
+.distraction-chip {
+  padding: 7px 14px; border-radius: 20px; cursor: pointer;
+  font-size: 0.82rem; font-weight: 600;
+  background: var(--bg-soft); color: var(--text-secondary);
+  border: 1px solid var(--border); transition: all 0.18s;
+}
+.distraction-chip:hover { border-color: var(--primary); }
+.distraction-chip.active {
+  background: var(--primary-pale); color: var(--primary);
+  border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary-glow);
+}
+.distraction-custom {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  min-height: 28px; margin-bottom: 12px;
+}
+.distraction-custom-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 6px 5px 12px; border-radius: 16px; font-size: 0.8rem;
+  background: var(--primary-pale); color: var(--primary); border: 1px solid var(--primary);
+}
+.distraction-remove {
+  border: none; background: transparent; color: var(--primary);
+  font-size: 1rem; line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.distraction-remove:hover { color: var(--danger, #ff5c7c); }
+.distraction-empty { font-size: 0.78rem; color: var(--text-muted); }
+.distraction-add { display: flex; gap: 8px; }
+.distraction-add input {
+  flex: 1; min-width: 0; padding: 8px 12px; border-radius: 10px;
+  background: var(--bg-soft); border: 1px solid var(--border); color: var(--text);
+  font-size: 0.85rem;
+}
+.distraction-add input:focus { outline: none; border-color: var(--primary); }
+
+/* 专注页实时分心提示 */
+.live-distractions {
+  margin-top: 12px; min-height: 22px; font-size: 0.82rem;
+  color: var(--text-muted); text-align: center;
+}
+.live-distractions.active {
+  color: var(--warning); font-weight: 600;
+}
+
 /* 开关 */
 .toggle-switch {
   position: relative; display: inline-block;

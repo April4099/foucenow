@@ -516,6 +516,21 @@
             </div>
           </div>
 
+          <!-- 分心应用 -->
+          <div class="settings-section">
+            <div class="settings-section-header">
+              <h3>🚫 分心应用</h3>
+              <span class="sub">专注时若切到这些软件，记为一次分心</span>
+            </div>
+            <p class="setting-hint">按进程名子串匹配，不区分大小写。做文件（Word/Excel 等）不会算分心，刷微信/浏览器等才记。仅桌面端 Windows 生效。</p>
+            <div class="distraction-presets" id="distraction-presets"></div>
+            <div class="distraction-custom" id="distraction-custom"></div>
+            <div class="distraction-add">
+              <input type="text" id="distraction-input" placeholder="添加进程名，如 wechat / chrome">
+              <button class="btn-secondary btn-sm" id="distraction-add-btn" type="button">添加</button>
+            </div>
+          </div>
+
           <!-- 程序控制 -->
           <div class="settings-section">
             <div class="settings-section-header">
@@ -700,6 +715,7 @@
             </div>
           </div>
           <div class="focus-quality" id="focus-quality"></div>
+          <div class="live-distractions" id="live-distractions"></div>
         </section>
 
       </main>

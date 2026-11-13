@@ -32,5 +32,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 专注护盾（全屏常驻置顶浮层）
   openShield: () => ipcRenderer.invoke('open-shield'),
   closeShield: () => ipcRenderer.invoke('close-shield'),
-  onShieldWindowState: (callback) => ipcRenderer.on('shield-window-state', (event, open) => callback(open))
+  onShieldWindowState: (callback) => ipcRenderer.on('shield-window-state', (event, open) => callback(open)),
+  // 前台「分心应用」检测（Windows 专用）
+  startFocusMonitor: (apps) => ipcRenderer.invoke('focus-monitor-start', apps),
+  stopFocusMonitor: () => ipcRenderer.invoke('focus-monitor-stop'),
+  setDistractionApps: (apps) => ipcRenderer.invoke('focus-monitor-set-apps', apps),
+  onFocusDistraction: (callback) => ipcRenderer.on('focus-distraction', () => callback())
 });
