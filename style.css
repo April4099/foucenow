@@ -2421,3 +2421,25 @@ body {
 .insight-chip.tone-good { background: var(--success-pale); color: var(--success); border-color: transparent; }
 .insight-chip.tone-warn { background: var(--warning-pale); color: var(--warning); border-color: transparent; }
 .insight-chip.tone-neutral { background: var(--bg-soft); color: var(--text-secondary); }
+
+/* ========== 新手引导 ========== */
+.onboard-modal { max-width: 420px; text-align: center; padding: 32px 28px 24px; }
+.onboard-icon { font-size: 3rem; line-height: 1; margin-bottom: 14px; }
+.onboard-title { margin: 0 0 14px; font-size: 1.3rem; font-weight: 800; color: var(--text); }
+.onboard-body { text-align: left; }
+.onboard-body p { margin: 0 0 10px; font-size: 0.92rem; line-height: 1.75; color: var(--text-secondary); }
+.onboard-body p:last-child { margin-bottom: 0; }
+.onboard-body b { color: var(--text); }
+.onboard-dots { display: flex; justify-content: center; gap: 8px; margin: 18px 0 4px; }
+.onboard-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.25s; }
+.onboard-dot.active { width: 22px; border-radius: 4px; background: var(--primary); }
+.onboard-actions { display: flex; gap: 12px; margin-top: 16px; }
+.onboard-actions .btn-secondary { flex: 0 0 auto; }
+.onboard-actions .btn-primary { flex: 1; }
+
+/* 空状态补充：提示小字 */
+.empty-state small { color: var(--text-secondary); opacity: 0.75; font-size: 0.8rem; }
+
+/* 成就墙空态提示 */
+.ach-hint { margin: 0 0 12px; font-size: 0.82rem; color: var(--text-secondary); }
+.ach-hint:empty { display: none; }

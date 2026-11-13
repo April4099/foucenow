@@ -453,6 +453,7 @@
               <span class="wn-title">🎖 成就墙</span>
               <span class="wn-sub" id="ach-count">0 / 0</span>
             </div>
+            <p class="ach-hint" id="ach-hint"></p>
             <div class="ach-grid" id="ach-grid"></div>
           </div>
         </section>
@@ -606,6 +607,7 @@
                 <span>当前版本</span>
                 <strong id="app-version">—</strong>
                 <button class="btn-secondary btn-sm" id="btn-check-update">检查更新</button>
+                <button class="btn-secondary btn-sm" id="btn-show-onboard">新手引导</button>
               </div>
             </div>
           </div>
@@ -1084,6 +1086,20 @@
         <div class="update-modal-actions" id="update-modal-actions">
           <button class="btn-secondary" id="update-btn-later">稍后再说</button>
           <button class="btn-primary" id="update-btn-main">立即更新</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 新手引导 ========== -->
+    <div class="modal-overlay" id="modal-onboard">
+      <div class="modal onboard-modal">
+        <div class="onboard-icon" id="onboard-icon">👋</div>
+        <h3 class="onboard-title" id="onboard-title">欢迎来到「此刻」</h3>
+        <div class="onboard-body" id="onboard-body"></div>
+        <div class="onboard-dots" id="onboard-dots"></div>
+        <div class="onboard-actions">
+          <button class="btn-secondary" id="onboard-skip">跳过</button>
+          <button class="btn-primary" id="onboard-next">下一步</button>
         </div>
       </div>
     </div>

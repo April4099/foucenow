@@ -313,7 +313,7 @@
     // 今日日程
     const ec = $('#today-events');
     if (!todayEvents.length) {
-      ec.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📅</div><p>今天还没有日程安排</p></div>';
+      ec.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📅</div><p>今天还没有日程安排<br><small>去「日程」或安排台放一件事进来</small></p></div>';
     } else {
       const now = nowHM();
       ec.innerHTML = todayEvents.slice(0, 5).map(ev => {
@@ -330,7 +330,9 @@
     const todayTodos = app.data.todos.filter(t => !t.completed && (t.due === today || !t.due));
     const tc = $('#today-todos');
     if (!todayTodos.length) {
-      tc.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><p>太棒了，今天的任务都完成了！</p></div>';
+      tc.innerHTML = app.data.todos.length
+        ? '<div class="empty-state"><div class="empty-state-icon">✅</div><p>太棒了，今天的任务都完成了！</p></div>'
+        : '<div class="empty-state"><div class="empty-state-icon">📝</div><p>还没有任务<br><small>去「待办」写下第一件想做的事吧</small></p></div>';
     } else {
       tc.innerHTML = todayTodos.slice(0, 4).map(t => renderTodoCompact(t)).join('');
     }
@@ -1615,6 +1617,12 @@
     if (!grid) return;
     const unlocked = new Set(getUnlockedAchievements());
     if (count) count.textContent = unlocked.size + ' / ' + ACHIEVEMENTS.length;
+    const hint = document.getElementById('ach-hint');
+    if (hint) {
+      hint.textContent = unlocked.size === 0
+        ? '✨ 完成第一次专注，即可解锁你的第一个成就'
+        : (unlocked.size < 3 ? '✨ 好的开始！连续专注 3 天可解锁「三日之约」' : '');
+    }
     grid.innerHTML = ACHIEVEMENTS.map(a => {
       const on = unlocked.has(a.id);
       return `<div class="ach-item${on ? '' : ' locked'}" title="${escapeHtml(a.desc)}">
@@ -2606,6 +2614,49 @@
     });
   }
 
+  /* ---------- 新手引导 ---------- */
+  const ONBOARD_STEPS = [
+    { icon: '👋', title: '欢迎来到「此刻」', html: '<p>一个<b>全本地、零账号、零隐私顾虑</b>的专注与日程工具。</p><p>所有数据只存在你自己的电脑上：不联网、不上传、不需要注册。</p>' },
+    { icon: '🍅', title: '三步上手', html: '<p><b>① 专注计时</b> —— 左侧「专注」页选好模式，点开始。</p><p><b>② 记下要做的事</b> —— 用「待办」与「日程」安放任务。</p><p><b>③ 自动沉淀</b> —— 每天的专注会汇成日历热力图、周报洞察与成就墙。</p>' },
+    { icon: '🛡️', title: '让专注更纯粹', html: '<p>计时中可开<b>「护盾」</b>全屏挡住桌面干扰，或开<b>「悬浮钟」</b>——离开软件去做事也能看时间。</p><p>在设置里勾选<b>「分心应用」</b>名单：专注时切去刷微信会被如实记进专注质量分。</p>' },
+    { icon: '🚀', title: '准备好了', html: '<p>完成第一次专注即可解锁首个成就，连续专注天数会点亮你的成长卡。</p><p>现在，开始你的第一次专注吧！</p>' }
+  ];
+  let onboardStep = 0;
+
+  function renderOnboardStep() {
+    const s = ONBOARD_STEPS[onboardStep];
+    $('#onboard-icon').textContent = s.icon;
+    $('#onboard-title').textContent = s.title;
+    $('#onboard-body').innerHTML = s.html;
+    $('#onboard-dots').innerHTML = ONBOARD_STEPS
+      .map((_, i) => '<span class="onboard-dot' + (i === onboardStep ? ' active' : '') + '"></span>')
+      .join('');
+    const last = onboardStep === ONBOARD_STEPS.length - 1;
+    $('#onboard-next').textContent = last ? '开始专注 →' : '下一步';
+    $('#onboard-skip').style.display = last ? 'none' : '';
+  }
+
+  function showOnboard() {
+    onboardStep = 0;
+    renderOnboardStep();
+    openModal('modal-onboard');
+  }
+
+  function initOnboarding() {
+    $('#onboard-next').addEventListener('click', () => {
+      if (onboardStep < ONBOARD_STEPS.length - 1) { onboardStep++; renderOnboardStep(); }
+      else { closeModal('modal-onboard'); switchView('focus'); }
+    });
+    $('#onboard-skip').addEventListener('click', () => closeModal('modal-onboard'));
+    const re = $('#btn-show-onboard');
+    if (re) re.addEventListener('click', showOnboard);
+    // 首次启动自动展示一次（看过即记，之后可从设置随时重看）
+    if (!localStorage.getItem('fn_onboarded')) {
+      try { localStorage.setItem('fn_onboarded', '1'); } catch (e) { /* ignore */ }
+      showOnboard();
+    }
+  }
+
   function initFloatingWidget() {
     const widget = $('#floating-timer');
     const ball = $('#floating-ball');
@@ -3038,6 +3089,7 @@
     initShield();
     initDistractionSettings();
     initSettingsCollapse();
+    initOnboarding();
     checkAchievements(false);
 
     // 智能整理：若有过期/遗留任务，轻提示
