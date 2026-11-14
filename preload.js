@@ -33,9 +33,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openShield: () => ipcRenderer.invoke('open-shield'),
   closeShield: () => ipcRenderer.invoke('close-shield'),
   onShieldWindowState: (callback) => ipcRenderer.on('shield-window-state', (event, open) => callback(open)),
-  // 前台「分心应用」检测（Windows 专用）
-  startFocusMonitor: (apps) => ipcRenderer.invoke('focus-monitor-start', apps),
+  // 前台「分心应用」检测（Windows 专用）：配置 { apps, allow }，按停留时长上报
+  startFocusMonitor: (cfg) => ipcRenderer.invoke('focus-monitor-start', cfg),
   stopFocusMonitor: () => ipcRenderer.invoke('focus-monitor-stop'),
-  setDistractionApps: (apps) => ipcRenderer.invoke('focus-monitor-set-apps', apps),
-  onFocusDistraction: (callback) => ipcRenderer.on('focus-distraction', () => callback())
+  setDistractionApps: (cfg) => ipcRenderer.invoke('focus-monitor-set-apps', cfg),
+  onFocusDistractionTime: (callback) => ipcRenderer.on('focus-distraction-time', (event, info) => callback(info)),
+  // 自动本地备份（主进程 userData/backups）
+  backupSave: (json) => ipcRenderer.invoke('backup-save', json),
+  backupList: () => ipcRenderer.invoke('backup-list'),
+  backupRead: (name) => ipcRenderer.invoke('backup-read', name)
 });

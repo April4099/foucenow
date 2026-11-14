@@ -1,7 +1,7 @@
 {
   "name": "focusnow",
   "productName": "此刻FocusNow",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "此刻 FocusNow - 专注日程管理",
   "main": "electron-main.js",
   "author": "FocusNow",

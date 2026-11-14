@@ -114,6 +114,7 @@
       events: [],
       sessions: [],
       distractionApps: ['wechat', 'chrome', 'msedge', 'firefox', 'steam', 'douyin', 'bilibili'],
+      distractionAllow: [],
       unlockedAchievements: [],
       settings: {
         pomodoroWork: 25,
@@ -150,6 +151,7 @@
       intervalId: null,
       customMinutes: 25,
       distractions: 0,
+      distractionSec: 0,
       pauses: 0
     },
     shieldActive: false
@@ -163,6 +165,8 @@
   if (!Array.isArray(app.data.unlockedAchievements)) {
     app.data.unlockedAchievements = [];
   }
+  // 迁移：老数据可能没有分心豁免白名单
+  if (!Array.isArray(app.data.distractionAllow)) app.data.distractionAllow = [];
   // 迁移：确保 settings 存在
   if (!app.data.settings) app.data.settings = defaultData().settings;
 
@@ -1289,11 +1293,13 @@
     else if (delta < 0) trendChip = { label: '环比上周', value: '▼ ' + delta + ' 分', tone: 'warn' };
     else trendChip = { label: '环比上周', value: '持平', tone: 'neutral' };
 
-    const avgDist = ws.reduce((a, s) => a + (s.distractions || 0), 0) / ws.length;
+    // 分心口径升级为「停留时长占比」；老数据无时长字段时按每次 20 秒估算
+    const distSec = ws.reduce((a, s) => a + (typeof s.distractionSec === 'number' ? s.distractionSec : (s.distractions || 0) * 20), 0);
+    const distPct = Math.round(distSec / Math.max(totalMin * 60, 1) * 100);
     let distChip;
-    if (avgDist === 0) distChip = { label: '分心', value: '零分心', tone: 'good' };
-    else if (avgDist < 1) distChip = { label: '分心', value: '偶尔(' + (Math.round(avgDist * 10) / 10) + ')', tone: 'neutral' };
-    else distChip = { label: '分心', value: '偏多(' + (Math.round(avgDist * 10) / 10) + ')', tone: 'warn' };
+    if (distPct === 0) distChip = { label: '分心占比', value: '0% · 零分心', tone: 'good' };
+    else if (distPct < 10) distChip = { label: '分心占比', value: distPct + '% · 偶尔', tone: 'neutral' };
+    else distChip = { label: '分心占比', value: distPct + '% · 偏多', tone: 'warn' };
 
     const rhythmChip = topSlot[1] > totalMin * 0.4
       ? { label: '节奏', value: '集中于' + topSlot[0], tone: 'good' }
@@ -1388,11 +1394,12 @@
     app.timer.running = true;
     app.timer.startedAt = new Date().toISOString();
     app.timer.distractions = 0;
+    app.timer.distractionSec = 0;
     app.timer.pauses = 0;
     updateLiveDistractions();
-    // 启动前台「分心应用」监控（仅桌面端 Windows 生效）
+    // 启动前台「分心应用」监控（仅桌面端 Windows 生效）：名单 + 豁免白名单
     if (window.electronAPI && window.electronAPI.startFocusMonitor) {
-      window.electronAPI.startFocusMonitor(app.data.distractionApps || []);
+      window.electronAPI.startFocusMonitor(buildFgCfg());
     }
 
     if (app.timer.mode === 'stopwatch') {
@@ -1465,10 +1472,12 @@
         endTime: new Date().toISOString(), durationMin: elapsedMin,
         todoId: app.timer.linkedTodoId || null, category,
         distractions: app.timer.distractions || 0,
+        distractionSec: app.timer.distractionSec || 0,
         pauses: app.timer.pauses || 0,
-        focusScore: computeFocusScore(elapsedMin, app.timer.distractions || 0, app.timer.pauses || 0)
+        focusScore: computeFocusScore(elapsedMin, app.timer.distractions || 0, app.timer.pauses || 0, app.timer.distractionSec || 0)
       });
       saveState();
+      maybeBackup();
     }
 
     if (app.timer.mode === 'pomodoro' && !skipped) {
@@ -1508,12 +1517,22 @@
   }
 
   /* ---------- 专注质量采集与评分 ---------- */
-  function computeFocusScore(min, distractions, pauses) {
+  function buildFgCfg() {
+    return { apps: app.data.distractionApps || [], allow: app.data.distractionAllow || [] };
+  }
+
+  // 评分以「分心停留时长占本次专注的比例」为主，而非切换次数：
+  // 在微信待 10 分钟应远比瞄一眼 8 个窗口严重。老数据无时长字段时按每次 20 秒估算。
+  function computeFocusScore(min, distractions, pauses, distractionSec) {
     if (!min || min <= 0) return 0;
-    let score = 100;
-    score -= (distractions || 0) * 6;
-    score -= Math.min(pauses || 0, 6) * 4;
-    if (min < 10) score += 10; // 短会话适度放宽
+    const totalSec = Math.max(min * 60, 1);
+    const dSec = (typeof distractionSec === 'number')
+      ? distractionSec
+      : (distractions || 0) * 20;
+    const ratio = Math.min(1, dSec / totalSec);
+    let score = 100 - ratio * 100 * 1.2;
+    score -= Math.min(pauses || 0, 6) * 3;
+    if (min < 10) score += 8; // 短会话适度放宽
     return Math.max(0, Math.min(100, Math.round(score)));
   }
 
@@ -1644,43 +1663,62 @@
 
   function initFocusQuality() {
     const isFocusPhase = () => ['work', 'custom', 'stopwatch'].includes(app.timer.phase);
-    let lastHidden = false;
-    const bumpDistraction = () => {
-      app.timer.distractions = (app.timer.distractions || 0) + 1;
-      updateLiveDistractions();
-    };
-    window.addEventListener('blur', () => {
-      // 悬浮钟模式下用户本就在用其他软件干活，切窗口是设计内的事，不计分心
-      if (app.timer.running && isFocusPhase() && !app.shieldActive && !floatWindowOpen) {
-        bumpDistraction();
-      }
-    });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden === lastHidden) return;
-      lastHidden = document.hidden;
-      // 悬浮钟模式下隐藏主窗口不算分心；仅普通模式（人坐在本软件却切走）与护盾模式计数
-      if (document.hidden && app.timer.running && isFocusPhase() && !app.shieldActive && !floatWindowOpen) {
-        bumpDistraction();
-      }
-    });
-    // 前台「分心应用」检测（来自主进程的 focus-distraction 事件）
-    // 注意：该信号在悬浮钟模式下也计分心——做文件不被冤枉，但真去刷微信/浏览器仍算
-    if (window.electronAPI && window.electronAPI.onFocusDistraction) {
-      window.electronAPI.onFocusDistraction(() => {
-        if (app.timer.running && isFocusPhase() && !app.shieldActive) {
-          bumpDistraction();
-        }
+    const canCount = () => app.timer.running && isFocusPhase() && !app.shieldActive;
+    const hasMonitor = !!(window.electronAPI && window.electronAPI.onFocusDistractionTime);
+
+    // 桌面端：主进程按「停留时长」累计，每 3 秒上报一次，切应用次数只作段数统计
+    if (hasMonitor) {
+      window.electronAPI.onFocusDistractionTime(info => {
+        if (!canCount()) return;
+        if (info && info.entered) app.timer.distractions = (app.timer.distractions || 0) + 1;
+        app.timer.distractionSec = (app.timer.distractionSec || 0) + ((info && info.seconds) || 0);
+        updateLiveDistractions();
+      });
+    } else {
+      // 浏览器预览环境无主进程监控，退化为失焦次数兜底（每次按 20 秒估算）
+      let lastHidden = false;
+      const bumpFallback = () => {
+        if (!canCount() || floatWindowOpen) return;
+        app.timer.distractions = (app.timer.distractions || 0) + 1;
+        app.timer.distractionSec = (app.timer.distractionSec || 0) + 20;
+        updateLiveDistractions();
+      };
+      window.addEventListener('blur', bumpFallback);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden === lastHidden) return;
+        lastHidden = document.hidden;
+        if (document.hidden) bumpFallback();
+      });
+    }
+
+    // 「刚才那段是正事」：一键把本次分心归零，避免误判污染质量分
+    const clearBtn = document.getElementById('btn-clear-distraction');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        app.timer.distractions = 0;
+        app.timer.distractionSec = 0;
+        updateLiveDistractions();
+        showToast('已把本次分心归零，这段不算 ✨', 'success');
       });
     }
   }
 
-  // 专注页实时「本次分心」提示（随分心次数刷新）
+  // 专注页实时「本次分心」提示（时长为主口径）
   function updateLiveDistractions() {
     const el = document.getElementById('live-distractions');
     if (!el) return;
+    const sec = app.timer.distractionSec || 0;
     const n = app.timer.distractions || 0;
-    el.textContent = n > 0 ? `本次分心 ${n} 次` : '';
-    el.classList.toggle('active', n > 0);
+    const label = sec >= 60
+      ? Math.floor(sec / 60) + ' 分' + (sec % 60 ? ' ' + (sec % 60) + ' 秒' : '')
+      : sec + ' 秒';
+    const has = sec > 0 || n > 0;
+    el.textContent = has
+      ? (sec > 0 ? '本次分心 ' + label + '（' + n + ' 段）' : '本次分心 ' + n + ' 次')
+      : '';
+    el.classList.toggle('active', has);
+    const btn = document.getElementById('btn-clear-distraction');
+    if (btn) btn.style.display = has ? '' : 'none';
   }
 
   function updateTimerDisplay() {
@@ -2308,10 +2346,13 @@
     const customEl = document.getElementById('distraction-custom');
     const inputEl = document.getElementById('distraction-input');
     const addBtn = document.getElementById('distraction-add-btn');
+    const allowEl = document.getElementById('distraction-allow');
+    const allowInput = document.getElementById('distraction-allow-input');
+    const allowAddBtn = document.getElementById('distraction-allow-add-btn');
 
     const syncToMain = () => {
       if (window.electronAPI && window.electronAPI.setDistractionApps) {
-        window.electronAPI.setDistractionApps(app.data.distractionApps || []);
+        window.electronAPI.setDistractionApps(buildFgCfg());
       }
     };
 
@@ -2328,6 +2369,12 @@
         customEl.innerHTML = custom.length
           ? custom.map(k => `<span class="distraction-custom-item" data-key="${escapeHtml(k)}">${escapeHtml(k)}<button type="button" class="distraction-remove" data-key="${escapeHtml(k)}" title="移除">×</button></span>`).join('')
           : '<span class="distraction-empty">（暂无自定义）</span>';
+      }
+      if (allowEl) {
+        const allow = app.data.distractionAllow || [];
+        allowEl.innerHTML = allow.length
+          ? allow.map(k => `<span class="distraction-custom-item allow" data-key="${escapeHtml(k)}">${escapeHtml(k)}<button type="button" class="distraction-remove" data-key="${escapeHtml(k)}" title="移除">×</button></span>`).join('')
+          : '<span class="distraction-empty">（暂无豁免，工作软件可加到这里）</span>';
       }
     };
 
@@ -2361,6 +2408,26 @@
     });
     if (addBtn) addBtn.addEventListener('click', addCustom);
     if (inputEl) inputEl.addEventListener('keydown', e => { if (e.key === 'Enter') addCustom(); });
+
+    const removeAllow = (key) => {
+      app.data.distractionAllow = (app.data.distractionAllow || []).filter(k => k !== key);
+      saveState(); render(); syncToMain();
+    };
+    const addAllow = () => {
+      if (!allowInput) return;
+      const v = (allowInput.value || '').trim().toLowerCase();
+      if (!v) return;
+      const list = app.data.distractionAllow || [];
+      if (!list.includes(v)) { list.push(v); app.data.distractionAllow = list; saveState(); }
+      allowInput.value = '';
+      render(); syncToMain();
+    };
+    if (allowEl) allowEl.addEventListener('click', e => {
+      const b = e.target.closest('.distraction-remove');
+      if (b) removeAllow(b.getAttribute('data-key'));
+    });
+    if (allowAddBtn) allowAddBtn.addEventListener('click', addAllow);
+    if (allowInput) allowInput.addEventListener('keydown', e => { if (e.key === 'Enter') addAllow(); });
 
     render();
     syncToMain();
@@ -2611,6 +2678,97 @@
           .map(s => s.id);
         try { localStorage.setItem(KEY, JSON.stringify({ closed })); } catch (e) { /* ignore */ }
       });
+    });
+  }
+
+  /* ---------- 自动本地备份 ---------- */
+  let pendingRestore = null;
+
+  function dataIsEmpty() {
+    return !(app.data.sessions && app.data.sessions.length)
+      && !(app.data.todos && app.data.todos.length)
+      && !(app.data.events && app.data.events.length)
+      && !(app.data.unlockedAchievements && app.data.unlockedAchievements.length);
+  }
+
+  function maybeBackup() {
+    // 空数据绝不写备份，避免「数据已丢失」的状态覆盖掉最近一份可用备份
+    if (dataIsEmpty()) return;
+    let json;
+    try { json = JSON.stringify(app.data); } catch (e) { return; }
+    try {
+      if (window.electronAPI && window.electronAPI.backupSave) {
+        Promise.resolve(window.electronAPI.backupSave(json)).catch(() => {});
+      } else {
+        try { localStorage.setItem('focusnow_backup_mirror', json); } catch (e) { /* ignore */ }
+      }
+    } catch (e) { /* 备份失败绝不影响计时主流程 */ }
+    try { localStorage.removeItem('fn_restore_dismissed'); } catch (e) { /* ignore */ }
+  }
+
+  async function initBackup() {
+    const api = window.electronAPI;
+    let list = [];
+    if (api && api.backupList) {
+      try { list = (await api.backupList()) || []; } catch (e) { list = []; }
+    } else {
+      let mirror = null;
+      try { mirror = localStorage.getItem('focusnow_backup_mirror'); } catch (e) { /* ignore */ }
+      if (mirror) list = [{ name: '本地镜像' }];
+    }
+
+    let dismissed = false;
+    try { dismissed = localStorage.getItem('fn_restore_dismissed') === '1'; } catch (e) { /* ignore */ }
+
+    if (dataIsEmpty() && list.length && !dismissed) {
+      let raw = null;
+      if (api && api.backupRead) {
+        try { raw = await api.backupRead(list[0].name); } catch (e) { raw = null; }
+      } else {
+        try { raw = localStorage.getItem('focusnow_backup_mirror'); } catch (e) { /* ignore */ }
+      }
+      let parsed = null;
+      try { parsed = raw ? JSON.parse(raw) : null; } catch (e) { /* ignore */ }
+      if (parsed) {
+        pendingRestore = parsed;
+        const desc = $('#restore-desc');
+        if (desc) {
+          const dateTxt = /\d{4}-\d{2}-\d{2}/.test(list[0].name) ? list[0].name.match(/\d{4}-\d{2}-\d{2}/)[0] : '最近一次';
+          desc.textContent = '找到 ' + dateTxt + ' 的本地备份：' + ((parsed.sessions || []).length) + ' 条专注记录、'
+            + ((parsed.todos || []).length) + ' 个待办、' + ((parsed.events || []).length) + ' 条日程。'
+            + '当前数据为空，是否恢复？';
+        }
+        openModal('modal-restore');
+        // 避免恢复弹窗与首次启动引导叠加
+        try { localStorage.setItem('fn_onboarded', '1'); } catch (e) { /* ignore */ }
+        initOnboarding();
+        return;
+      }
+    }
+    maybeBackup();
+    initOnboarding();
+  }
+
+  function initBackupUI() {
+    const ok = $('#restore-confirm');
+    if (ok) ok.addEventListener('click', () => {
+      if (!pendingRestore) { closeModal('modal-restore'); return; }
+      const base = defaultData();
+      app.data = Object.assign(base, pendingRestore);
+      if (!Array.isArray(app.data.distractionApps)) app.data.distractionApps = base.distractionApps;
+      if (!Array.isArray(app.data.distractionAllow)) app.data.distractionAllow = [];
+      if (!Array.isArray(app.data.unlockedAchievements)) app.data.unlockedAchievements = [];
+      app.data.settings = Object.assign(base.settings, app.data.settings || {});
+      saveState();
+      maybeBackup();
+      try { localStorage.removeItem('fn_restore_dismissed'); } catch (e) { /* ignore */ }
+      closeModal('modal-restore');
+      window.location.reload();
+    });
+    const skip = $('#restore-skip');
+    if (skip) skip.addEventListener('click', () => {
+      try { localStorage.setItem('fn_restore_dismissed', '1'); } catch (e) { /* ignore */ }
+      closeModal('modal-restore');
     });
   }
 
@@ -3089,7 +3247,8 @@
     initShield();
     initDistractionSettings();
     initSettingsCollapse();
-    initOnboarding();
+    initBackupUI();
+    initBackup(); // 内部按检测结果决定是否弹新手引导，避免与恢复弹窗叠加
     checkAchievements(false);
 
     // 智能整理：若有过期/遗留任务，轻提示

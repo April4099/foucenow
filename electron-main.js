@@ -185,7 +185,15 @@ ipcMain.handle('close-shield', () => {
 });
 
 /* ========== 前台「分心应用」检测（Windows 专用） ========== */
-let fgMonitor = { active: false, apps: [], timer: null, lastDistract: false };
+const FG_POLL_SEC = 3;
+let fgMonitor = { active: false, apps: [], allow: [], timer: null, lastDistract: false };
+
+function normalizeFgCfg(cfg) {
+  if (Array.isArray(cfg)) return { apps: cfg, allow: [] };
+  const o = cfg && typeof cfg === 'object' ? cfg : {};
+  return { apps: o.apps || [], allow: o.allow || [] };
+}
+const lowerList = a => (a || []).map(x => String(x).toLowerCase());
 
 function buildFgScript() {
   // 取前台窗口所属进程名（PowerShell P/Invoke，base64 编码避免引号转义问题）
@@ -223,24 +231,30 @@ function queryForegroundProcess() {
 }
 
 async function tickFg() {
-  const info = await queryForegroundProcess();
-  if (!info) { fgMonitor.lastDistract = false; return; }
-  const isDistract = fgMonitor.apps.some(a => info.indexOf(String(a).toLowerCase()) !== -1);
-  // 边沿触发：连续停留在分心应用只记 1 次；离开后再进入再记 1 次
-  if (isDistract && !fgMonitor.lastDistract) {
+  const name = await queryForegroundProcess();
+  if (!name) { fgMonitor.lastDistract = false; return; }
+  const inAllow = fgMonitor.allow.some(a => name.indexOf(a) !== -1);
+  const isDistract = !inAllow && fgMonitor.apps.some(a => name.indexOf(a) !== -1);
+  if (isDistract) {
+    const entered = !fgMonitor.lastDistract;
     fgMonitor.lastDistract = true;
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('focus-distraction');
-  } else if (!isDistract) {
+    // 按「停留时长」上报：每次轮询累加 FG_POLL_SEC 秒；entered 仅用于统计段数
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('focus-distraction-time', { seconds: FG_POLL_SEC, entered });
+    }
+  } else {
     fgMonitor.lastDistract = false;
   }
 }
 
-function startFgMonitor(apps) {
-  fgMonitor.apps = (apps || []).map(a => String(a).toLowerCase());
+function startFgMonitor(cfg) {
+  const c = normalizeFgCfg(cfg);
+  fgMonitor.apps = lowerList(c.apps);
+  fgMonitor.allow = lowerList(c.allow);
   fgMonitor.active = true;
   fgMonitor.lastDistract = false;
   if (fgMonitor.timer) clearInterval(fgMonitor.timer);
-  fgMonitor.timer = setInterval(tickFg, 3000);
+  fgMonitor.timer = setInterval(tickFg, FG_POLL_SEC * 1000);
 }
 
 function stopFgMonitor() {
@@ -249,11 +263,55 @@ function stopFgMonitor() {
   if (fgMonitor.timer) { clearInterval(fgMonitor.timer); fgMonitor.timer = null; }
 }
 
-ipcMain.handle('focus-monitor-start', (e, apps) => { startFgMonitor(apps); return { status: 'started' }; });
+ipcMain.handle('focus-monitor-start', (e, cfg) => { startFgMonitor(cfg); return { status: 'started' }; });
 ipcMain.handle('focus-monitor-stop', () => { stopFgMonitor(); return { status: 'stopped' }; });
-ipcMain.handle('focus-monitor-set-apps', (e, apps) => {
-  fgMonitor.apps = (apps || []).map(a => String(a).toLowerCase());
+ipcMain.handle('focus-monitor-set-apps', (e, cfg) => {
+  const c = normalizeFgCfg(cfg);
+  fgMonitor.apps = c.apps;
+  fgMonitor.allow = c.allow;
   return { status: 'set' };
+});
+
+/* ========== 自动本地备份（防重装 / 清数据导致的历史归零） ========== */
+const BACKUP_KEEP = 7;
+const BACKUP_NAME_RE = /^focusnow-\d{4}-\d{2}-\d{2}\.json$/;
+
+function backupDir() {
+  const d = path.join(app.getPath('userData'), 'backups');
+  try { fs.mkdirSync(d, { recursive: true }); } catch (e) { /* ignore */ }
+  return d;
+}
+
+function writeBackup(json) {
+  try {
+    if (typeof json !== 'string' || !json) return { ok: false, error: 'empty' };
+    const d = backupDir();
+    const day = new Date().toISOString().slice(0, 10);
+    fs.writeFileSync(path.join(d, 'focusnow-' + day + '.json'), json, 'utf8');
+    const files = fs.readdirSync(d).filter(f => BACKUP_NAME_RE.test(f)).sort();
+    while (files.length > BACKUP_KEEP) {
+      const old = files.shift();
+      try { fs.unlinkSync(path.join(d, old)); } catch (e) { /* ignore */ }
+    }
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+function listBackups() {
+  try {
+    const d = backupDir();
+    return fs.readdirSync(d).filter(f => BACKUP_NAME_RE.test(f)).sort().reverse().map(f => {
+      const st = fs.statSync(path.join(d, f));
+      return { name: f, size: st.size, mtime: st.mtime.toISOString() };
+    });
+  } catch (e) { return []; }
+}
+
+ipcMain.handle('backup-save', (e, json) => writeBackup(json));
+ipcMain.handle('backup-list', () => listBackups());
+ipcMain.handle('backup-read', (e, name) => {
+  if (!BACKUP_NAME_RE.test(String(name || ''))) return null;
+  try { return fs.readFileSync(path.join(backupDir(), name), 'utf8'); } catch (e) { return null; }
 });
 
 /* ========== 更新检查 ========== */
