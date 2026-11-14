@@ -2466,3 +2466,182 @@ body {
   font-size: 0.9rem; line-height: 1.7;
   color: var(--text-secondary); text-align: left; margin: 0 0 4px;
 }
+
+/* ============================================
+   v1.11.0 动效系统：统一缓动 / 层级 / 微交互
+   原则：克制、有物理感、不打断操作；尊重 reduced-motion
+   ============================================ */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
+  --lift-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+
+/* 视图切换：柔和淡入 + 内容依次浮现（视图根不用 transform，避免影响 fixed 定位） */
+.view { animation: viewFade var(--dur-slow) var(--ease-out) both; }
+@keyframes viewFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes riseSoft {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.view.active > *:not(.dashboard-grid) { animation: riseSoft var(--dur-slow) var(--ease-out) both; }
+.view.active > .dashboard-grid > * { animation: riseSoft var(--dur-slow) var(--ease-out) both; }
+.view.active > *:nth-child(1), .view.active > .dashboard-grid > *:nth-child(1) { animation-delay: 0ms; }
+.view.active > *:nth-child(2), .view.active > .dashboard-grid > *:nth-child(2) { animation-delay: 40ms; }
+.view.active > *:nth-child(3), .view.active > .dashboard-grid > *:nth-child(3) { animation-delay: 80ms; }
+.view.active > *:nth-child(4), .view.active > .dashboard-grid > *:nth-child(4) { animation-delay: 120ms; }
+.view.active > *:nth-child(5), .view.active > .dashboard-grid > *:nth-child(5) { animation-delay: 160ms; }
+.view.active > *:nth-child(6), .view.active > .dashboard-grid > *:nth-child(6) { animation-delay: 200ms; }
+.view.active > *:nth-child(n+7), .view.active > .dashboard-grid > *:nth-child(n+7) { animation-delay: 240ms; }
+
+/* 统一过渡：交互控件 */
+button:not(:disabled), .distraction-chip, .mode-chip, .phase-chip,
+.sidebar-item, .nav-item, .sidebar-settings-btn, .insight-chip {
+  transition: transform var(--dur-fast) var(--ease-spring),
+              background var(--dur-base) var(--ease-smooth),
+              color var(--dur-base) var(--ease-smooth),
+              border-color var(--dur-base) var(--ease-smooth),
+              box-shadow var(--dur-base) var(--ease-out),
+              opacity var(--dur-base) var(--ease-smooth);
+}
+/* 统一过渡：卡片与列表项 */
+.card, .growth-card, .focus-goal-card, .fstat-card, .ach-wall,
+.greeting-card, .motivation-card, .next-reminder, .todo-item,
+.cal-day, .ach-item, .settings-section, .focus-summary, .peak-banner {
+  transition: transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-smooth),
+              background var(--dur-base) var(--ease-smooth),
+              opacity var(--dur-base) var(--ease-smooth);
+}
+
+/* 卡片层次：轻微抬升，一眼能看出「可交互」 */
+.card:hover, .growth-card:hover, .focus-goal-card:hover, .fstat-card:hover,
+.ach-wall:hover, .motivation-card:hover, .todo-item:hover, .ach-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-light);
+  box-shadow: var(--lift-shadow);
+}
+.btn-primary:hover, .btn-secondary:hover, .btn-danger:hover { transform: translateY(-1px); }
+
+/* 按压反馈：所有可点元素统一有「按下去」的手感 */
+button:not(:disabled):active, .distraction-chip:active, .mode-chip:active, .phase-chip:active {
+  transform: scale(0.96);
+}
+button.ctrl-btn:active, button.icon-btn:active { transform: scale(0.92); }
+
+/* 键盘焦点可见（无障碍，同时让键盘操作更顺） */
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 3px;
+}
+
+/* 侧栏选中指示条：滑动出现而非硬切背景 */
+.sidebar-item, .sidebar-settings-btn { position: relative; overflow: hidden; }
+.sidebar-item::before, .sidebar-settings-btn::before {
+  content: ''; position: absolute; left: 0; top: 50%;
+  width: 3px; height: 0; border-radius: 0 4px 4px 0;
+  background: var(--primary); transform: translateY(-50%);
+  transition: height var(--dur-base) var(--ease-spring);
+}
+.sidebar-item.active::before, .sidebar-settings-btn.active::before { height: 58%; }
+
+/* 进度类元素平滑推进，数字不再每秒硬跳 */
+.timer-ring-fill, .goal-ring-fill, .side-ring-fill {
+  transition: stroke-dashoffset var(--dur-slow) var(--ease-out);
+}
+.growth-bar { transition: width var(--dur-slow) var(--ease-out); }
+.timer-digits, .mini-stat-num, .fstat-num, #sidebar-focus-min,
+#goal-percent, #goal-detail, .growth-total, .insight-chip {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Toast 弹性入场 */
+.toast {
+  animation: toastSpring var(--dur-slow) var(--ease-spring) both,
+             toastOut 280ms var(--ease-smooth) 2.7s forwards;
+}
+@keyframes toastSpring {
+  from { opacity: 0; transform: translateY(-14px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 弹窗与折叠：不再硬切 */
+.modal { animation: modalSoft var(--dur-base) var(--ease-out) both; }
+@keyframes modalSoft {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.sec-chevron { transition: transform var(--dur-base) var(--ease-spring); }
+.settings-section:not(.collapsed) > *:not(.settings-section-header) {
+  animation: revealSoft 320ms var(--ease-out) both;
+}
+@keyframes revealSoft {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 主题切换与滚动条：细节质感 */
+body, .sidebar, .app-header {
+  transition: background var(--dur-slow) var(--ease-smooth),
+              color var(--dur-slow) var(--ease-smooth);
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-light); border-radius: 10px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--primary); background-clip: padding-box; }
+
+/* ---------- v1.11.0 新增组件 ---------- */
+.focus-summary {
+  margin-top: 14px; padding: 14px 18px; border-radius: 16px;
+  background: var(--success-pale); border: 1px solid var(--success);
+  text-align: center;
+}
+.focus-summary[hidden] { display: none; }
+.focus-summary.pop { animation: summaryPop 520ms var(--ease-spring) both; }
+@keyframes summaryPop {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.fs-head { font-size: 1rem; font-weight: 700; color: var(--success); margin-bottom: 4px; }
+.fs-body { font-size: 0.84rem; color: var(--text-secondary); }
+.fs-body b { color: var(--text); }
+
+.growth-insight { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.growth-insight .insight-chip { font-size: 0.74rem; padding: 4px 9px; }
+
+.peak-banner {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 16px;
+  background: var(--primary-pale); border: 1px solid var(--primary);
+  font-size: 0.86rem; color: var(--text);
+}
+.peak-banner[hidden] { display: none; }
+.peak-banner .pb-icon { font-size: 1.2rem; }
+.peak-banner .pb-text { flex: 1; line-height: 1.6; }
+.peak-banner .pb-text b { color: var(--primary); }
+.peak-banner button {
+  flex-shrink: 0; border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); border-radius: 9px;
+  padding: 5px 11px; font-size: 0.78rem; cursor: pointer; font-family: inherit;
+}
+
+/* 尊重系统「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

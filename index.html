@@ -141,6 +141,12 @@
         <!-- ========== 今日 ========== -->
         <section id="view-today" class="view active">
           <div class="dashboard-grid">
+            <!-- 高效时段轻提醒 -->
+            <div class="peak-banner" id="peak-banner" hidden>
+              <span class="pb-icon">⏰</span>
+              <span class="pb-text" id="peak-banner-text"></span>
+              <button type="button" id="peak-banner-close">知道了</button>
+            </div>
             <!-- 问候卡片 -->
             <div class="greeting-card">
               <div class="greeting-text">
@@ -176,6 +182,7 @@
               <div class="growth-bar-wrap"><div class="growth-bar" id="growth-bar"></div></div>
               <div class="growth-bar-label" id="growth-bar-label">距下一级还需 0 分钟</div>
               <div class="growth-ach" id="growth-ach">已解锁成就 0 / 0</div>
+              <div class="growth-insight" id="growth-insight"></div>
             </div>
 
             <!-- 专注目标 -->
@@ -502,6 +509,16 @@
               </div>
               <div class="setting-row">
                 <div class="setting-info">
+                  <span class="setting-label">⏰ 高效时段提醒</span>
+                  <span class="setting-desc">根据你本地的历史专注记录，在你的高产时段轻提示一次</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-peak-remind">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
                   <span class="setting-label">📊 每日专注目标</span>
                   <span class="setting-desc">每天的专注时间目标（分钟）</span>
                 </div>
@@ -751,6 +768,7 @@
             </div>
           </div>
           <div class="focus-quality" id="focus-quality"></div>
+          <div class="focus-summary" id="focus-summary" hidden></div>
           <div class="live-distraction-row">
             <div class="live-distractions" id="live-distractions"></div>
             <button class="btn-link" id="btn-clear-distraction" type="button" style="display:none">误判？清零</button>

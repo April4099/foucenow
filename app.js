@@ -122,7 +122,8 @@
         pomodoroLongBreak: 15,
         pomodorosUntilLongBreak: 4,
         dailyFocusGoal: 120,
-        soundEnabled: true
+        soundEnabled: true,
+        peakRemindEnabled: true
       }
     };
   }
@@ -353,6 +354,7 @@
     ];
     $('#motivation-text').textContent = motives[Math.floor(Math.random() * motives.length)];
     renderGrowth();
+    renderTodayInsight();
   }
 
   function renderNextReminder() {
@@ -1243,6 +1245,104 @@
   }
 
   /* ---------- 本周回顾（叙事化） ---------- */
+  /* ---------- 让数据说话：结束小结 / 今日摘要 / 高效时段提醒 ---------- */
+  function renderFocusSummary(elapsedMin) {
+    const el = document.getElementById('focus-summary');
+    if (!el) return;
+    const today = todayStr();
+    const yest = addDays(today, -1);
+    const sumOn = d => app.data.sessions.filter(s => s.date === d)
+      .reduce((a, s) => a + (s.durationMin || 0), 0);
+    const todayMin = sumOn(today);
+    const yestMin = sumOn(yest);
+    const delta = todayMin - yestMin;
+    const cmp = yestMin === 0
+      ? '昨天没有记录，今天开了个好头'
+      : (delta > 0 ? '比昨天多 ' + delta + ' 分钟'
+        : (delta < 0 ? '比昨天少 ' + (-delta) + ' 分钟' : '与昨天持平'));
+    el.innerHTML = '<div class="fs-head">✨ 本次 +' + elapsedMin + ' 分钟</div>'
+      + '<div class="fs-body">今天累计 <b>' + todayMin + '</b> 分钟 · '
+      + escapeHtml(cmp) + ' · 连续 <b>' + computeStreak() + '</b> 天</div>';
+    el.hidden = false;
+    el.classList.remove('pop');
+    void el.offsetWidth; // 强制重排，让动画每次完成都重放
+    el.classList.add('pop');
+  }
+
+  function renderTodayInsight() {
+    const el = document.getElementById('growth-insight');
+    if (!el) return;
+    const data = buildWeekNarrative();
+    if (!data) {
+      el.innerHTML = '<span class="insight-chip tone-neutral">完成第一次专注，这里会出现你的本周洞察 ✨</span>';
+      return;
+    }
+    const trend = data.chips.find(c => c.label.indexOf('环比') >= 0);
+    const best = data.chips.find(c => c.label === '最佳时段');
+    const html = [];
+    if (trend) html.push('<span class="insight-chip tone-' + trend.tone + '">'
+      + escapeHtml(trend.label) + ' ' + escapeHtml(trend.value) + '</span>');
+    if (best) html.push('<span class="insight-chip tone-good">高效时段 ' + escapeHtml(best.value) + '</span>');
+    try {
+      const unlocked = new Set(getUnlockedAchievements());
+      const next = ACHIEVEMENTS.find(a => !unlocked.has(a.id));
+      html.push(next
+        ? '<span class="insight-chip tone-neutral">🎯 下一个成就：' + escapeHtml(next.name) + '</span>'
+        : '<span class="insight-chip tone-good">🏆 成就已全部解锁</span>');
+    } catch (e) { /* 成就数据异常不影响今日视图其余部分 */ }
+    el.innerHTML = html.join('');
+  }
+
+  // 用最近 14 天的专注记录算出高产时段；数据太少或分布太散就不提醒
+  function computePeakSlot() {
+    const today = todayStr();
+    const from = addDays(today, -13);
+    const ss = app.data.sessions.filter(s => s.date >= from && s.date <= today && (s.durationMin || 0) > 0);
+    if (ss.length < 3) return null;
+    const slots = [
+      { label: '早晨', start: 6, end: 8 }, { label: '上午', start: 8, end: 11 },
+      { label: '中午', start: 11, end: 14 }, { label: '下午', start: 14, end: 18 },
+      { label: '晚上', start: 18, end: 23 }
+    ];
+    const mins = slots.map(() => 0);
+    ss.forEach(s => {
+      const h = s.startTime ? new Date(s.startTime).getHours() : 12;
+      const i = slots.findIndex(x => h >= x.start && h < x.end);
+      if (i >= 0) mins[i] += s.durationMin;
+    });
+    const total = mins.reduce((a, b) => a + b, 0);
+    if (!total) return null;
+    let bi = 0;
+    mins.forEach((m, i) => { if (m > mins[bi]) bi = i; });
+    if (mins[bi] / total < 0.35) return null;
+    return { label: slots[bi].label, start: slots[bi].start, end: slots[bi].end, minutes: mins[bi] };
+  }
+
+  function initPeakReminder() {
+    const banner = document.getElementById('peak-banner');
+    const textEl = document.getElementById('peak-banner-text');
+    const closeBtn = document.getElementById('peak-banner-close');
+    if (!banner || !textEl) return;
+    if (closeBtn) closeBtn.addEventListener('click', () => { banner.hidden = true; });
+
+    const check = () => {
+      if (app.data.settings.peakRemindEnabled === false) return;
+      if (app.ui.currentView !== 'today') return; // 只在今日视图提示，保证横幅可见
+      const peak = computePeakSlot();
+      if (!peak) return;
+      const h = new Date().getHours();
+      if (h < peak.start || h >= peak.end) return;
+      const key = 'fn_peak_reminded_' + todayStr();
+      try { if (localStorage.getItem(key) === '1') return; } catch (e) { return; }
+      textEl.innerHTML = '你过去两周在 <b>' + escapeHtml(peak.label) + '</b> 投入最多（累计 '
+        + peak.minutes + ' 分钟）。现在正是你的高产时段，要不要来一段专注？';
+      banner.hidden = false;
+      try { localStorage.setItem(key, '1'); } catch (e) { /* ignore */ }
+    };
+    check();
+    setInterval(check, 60000);
+  }
+
   function buildWeekNarrative() {
     const today = todayStr();
     const days = [];
@@ -1478,6 +1578,7 @@
       });
       saveState();
       maybeBackup();
+      renderFocusSummary(elapsedMin);
     }
 
     if (app.timer.mode === 'pomodoro' && !skipped) {
@@ -2214,9 +2315,11 @@
     const workEl = $('#setting-pomo-work');
     const shortEl = $('#setting-pomo-short');
     const longEl = $('#setting-pomo-long');
+    const peakEl = $('#setting-peak-remind');
 
     if (soundEl) soundEl.checked = s.soundEnabled !== false;
     if (notifyEl) notifyEl.checked = s.notifEnabled === true;
+    if (peakEl) peakEl.checked = s.peakRemindEnabled !== false;
     if (goalEl) goalEl.value = s.dailyFocusGoal || 120;
     if (workEl) workEl.value = s.pomodoroWork || 25;
     if (shortEl) shortEl.value = s.pomodoroShortBreak || 5;
@@ -2246,6 +2349,18 @@
       } else {
         showToast(notifyEl.checked ? '通知已开启 🔔' : '通知已关闭', 'success');
       }
+    });
+
+    // 高效时段提醒开关
+    const peakEl = $('#setting-peak-remind');
+    if (peakEl) peakEl.addEventListener('change', () => {
+      app.data.settings.peakRemindEnabled = peakEl.checked;
+      saveState();
+      if (!peakEl.checked) {
+        const b = document.getElementById('peak-banner');
+        if (b) b.hidden = true;
+      }
+      showToast(peakEl.checked ? '高效时段提醒已开启 ⏰' : '高效时段提醒已关闭', 'success');
     });
 
     // 每日目标
@@ -3249,6 +3364,7 @@
     initSettingsCollapse();
     initBackupUI();
     initBackup(); // 内部按检测结果决定是否弹新手引导，避免与恢复弹窗叠加
+    initPeakReminder();
     checkAchievements(false);
 
     // 智能整理：若有过期/遗留任务，轻提示
