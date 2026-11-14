@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, ipcMain, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -312,6 +312,33 @@ ipcMain.handle('backup-list', () => listBackups());
 ipcMain.handle('backup-read', (e, name) => {
   if (!BACKUP_NAME_RE.test(String(name || ''))) return null;
   try { return fs.readFileSync(path.join(backupDir(), name), 'utf8'); } catch (e) { return null; }
+});
+
+/* ========== 原生系统通知（不依赖渲染进程 HTML5 通知权限） ========== */
+// Windows 下设置 AppUserModelID，否则系统 toast 可能不稳定
+if (process.platform === 'win32') {
+  try { app.setAppUserModelId('com.focusnow.app'); } catch (e) { /* ignore */ }
+}
+
+ipcMain.handle('show-notification', (e, payload) => {
+  const { title, body } = payload || {};
+  try {
+    if (!Notification.isSupported()) return { ok: false, reason: 'unsupported' };
+    const n = new Notification({
+      title: String(title || '此刻 FocusNow'),
+      body: String(body || ''),
+      silent: false // 系统通知自带提示音，即使主窗口隐藏也能听见
+    });
+    n.on('click', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    n.show();
+    return { ok: true };
+  } catch (err) { return { ok: false, reason: err.message }; }
 });
 
 /* ========== 更新检查 ========== */

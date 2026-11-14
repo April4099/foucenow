@@ -41,5 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 自动本地备份（主进程 userData/backups）
   backupSave: (json) => ipcRenderer.invoke('backup-save', json),
   backupList: () => ipcRenderer.invoke('backup-list'),
-  backupRead: (name) => ipcRenderer.invoke('backup-read', name)
+  backupRead: (name) => ipcRenderer.invoke('backup-read', name),
+  // 原生系统通知（主进程 Electron Notification，无需 HTML5 权限）
+  showSystemNotification: (title, body) => ipcRenderer.invoke('show-notification', { title, body })
 });

@@ -123,6 +123,7 @@
         pomodorosUntilLongBreak: 4,
         dailyFocusGoal: 120,
         soundEnabled: true,
+        notifEnabled: true,
         peakRemindEnabled: true
       }
     };
@@ -174,15 +175,17 @@
   /* ---------- 音效 ---------- */
   let audioCtx = null;
 
-  function playTone(freq, dur, type) {
+  function playTone(freq, dur, type, vol) {
     if (!app.data.settings.soundEnabled) return;
     try {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // 自动播放策略下 AudioContext 可能是 suspended，不 resume 就会「静默失败」
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
       const o = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       o.type = type || 'sine';
       o.frequency.value = freq;
-      g.gain.setValueAtTime(0.25, audioCtx.currentTime);
+      g.gain.setValueAtTime(vol || 0.25, audioCtx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
       o.connect(g);
       g.connect(audioCtx.destination);
@@ -191,10 +194,30 @@
     } catch (e) { /* skip */ }
   }
 
+  // 首次用户交互就解锁音频，保证计时到点时 AudioContext 已处于 running
+  function unlockAudio() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    } catch (e) { /* ignore */ }
+    window.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  }
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
+
   function playCompleteSound() {
     playTone(523, 0.15);
     setTimeout(() => playTone(659, 0.15), 150);
     setTimeout(() => playTone(784, 0.25), 300);
+  }
+
+  // 阶段结束提示音：专注结束上行（轻松），休息结束下行（收心），比原来的双音更醒目
+  function playPhaseSound(kind) {
+    const seq = kind === 'breakEnd'
+      ? [[784, 0.2], [659, 0.2], [523, 0.34]]
+      : [[523, 0.18], [659, 0.18], [784, 0.22], [1047, 0.4]];
+    seq.forEach(([f, d], i) => setTimeout(() => playTone(f, d, 'sine', 0.32), i * 200));
   }
 
   function playTickSound() { playTone(880, 0.04, 'triangle'); }
@@ -209,8 +232,16 @@
     setTimeout(() => t.remove(), 3000);
   }
 
-  /* ---------- 浏览器通知 ---------- */
+  /* ---------- 通知（桌面端优先走主进程原生 Windows toast） ---------- */
   function requestNotifPermission() {
+    // 桌面端原生通知不需要权限，点铃铛即发一条测试通知，方便确认链路通畅
+    if (window.electronAPI && window.electronAPI.showSystemNotification) {
+      Promise.resolve(window.electronAPI.showSystemNotification('此刻 FocusNow · 测试通知',
+        '系统弹窗已就绪，计时到点时会这样提醒你 🔔')).catch(() => {});
+      playPhaseSound('focusEnd');
+      showToast('已发送测试通知，看看右下角 🔔', 'success');
+      return;
+    }
     if (typeof Notification === 'undefined') return showToast('此浏览器不支持通知', 'warning');
     if (Notification.permission === 'granted') {
       showToast('通知已开启 ✓', 'success');
@@ -224,24 +255,98 @@
   }
 
   function updateNotifBtn() {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      $('#btn-notify').classList.add('notif-on');
+    const on = (window.electronAPI && window.electronAPI.showSystemNotification)
+      || (typeof Notification !== 'undefined' && Notification.permission === 'granted');
+    if (on) $('#btn-notify').classList.add('notif-on');
+  }
+
+  function sendNotification(title, body, opts) {
+    const o = opts || {};
+    const kind = o.kind || 'reminder';
+    // 桌面端：主进程 Electron Notification（Windows 原生 toast，不需权限、离开软件也可见）
+    if (app.data.settings.notifEnabled !== false) {
+      if (window.electronAPI && window.electronAPI.showSystemNotification) {
+        Promise.resolve(window.electronAPI.showSystemNotification(title, body)).catch(() => {});
+      } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification(title, { body, tag: 'focusnow-' + Date.now() }); } catch (e) { /* skip */ }
+      }
+    }
+    showToast(title + ' · ' + body, 'warning');
+    if (o.sound !== false) {
+      if (kind === 'reminder') {
+        playTone(880, 0.3, 'triangle');
+        setTimeout(() => playTone(660, 0.3, 'triangle'), 250);
+      } else {
+        playPhaseSound(kind);
+      }
     }
   }
 
-  function sendNotification(title, body) {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      try {
-        new Notification(title, {
-          body,
-          icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏰</text></svg>",
-          tag: 'focusnow-' + Date.now()
-        });
-      } catch (e) { /* skip */ }
+  /* ---------- 阶段结束醒目弹窗 ---------- */
+  function showPhaseModal(cfg) {
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    set('phase-icon', cfg.icon);
+    set('phase-title', cfg.title);
+    set('phase-desc', cfg.desc);
+    set('phase-detail', cfg.detail || '');
+    set('phase-start', cfg.action || '开始下一段 →');
+    const icon = document.getElementById('phase-icon');
+    if (icon) { // 重放弹跳动画
+      icon.style.animation = 'none';
+      void icon.offsetWidth;
+      icon.style.animation = '';
     }
-    showToast(title + ' · ' + body, 'warning');
-    playTone(880, 0.3, 'triangle');
-    setTimeout(() => playTone(660, 0.3, 'triangle'), 250);
+    openModal('modal-phase');
+  }
+
+  function initPhaseModal() {
+    const start = document.getElementById('phase-start');
+    if (start) start.addEventListener('click', () => {
+      closeModal('modal-phase');
+      if (!app.timer.running) startTimer();
+    });
+    const later = document.getElementById('phase-later');
+    if (later) later.addEventListener('click', () => closeModal('modal-phase'));
+  }
+
+  // 到点统一播报：原生系统弹窗 + 提示音 + 应用内醒目弹窗，三层兜底
+  function announcePhaseEnd(elapsedMin) {
+    const isPomo = app.timer.mode === 'pomodoro';
+    const goingBreak = isPomo && app.timer.phase !== 'work';
+    const longBreak = goingBreak && app.timer.phase === 'longBreak';
+    const todayMin = app.data.sessions.filter(s => s.date === todayStr())
+      .reduce((a, s) => a + (s.durationMin || 0), 0);
+
+    let cfg;
+    if (goingBreak) {
+      cfg = {
+        icon: longBreak ? '🌴' : '🌿',
+        title: longBreak ? '完成一轮！该长休息了' : '专注完成！',
+        desc: longBreak ? '连续完成多个番茄，好好放松一下再回来。' : '这一段结束了，起来活动一下、让眼睛歇会儿。',
+        detail: elapsedMin > 0 ? '本次专注 ' + elapsedMin + ' 分钟 · 今天累计 ' + todayMin + ' 分钟' : '',
+        action: longBreak ? '开始长休息 →' : '开始休息 →',
+        kind: 'focusEnd',
+        notifTitle: longBreak ? '完成一轮！长休息开始' : '专注完成！',
+        notifBody: longBreak ? '辛苦了，好好放松一下 🌴' : '该休息一下啦，起来活动活动 🌿'
+      };
+    } else if (isPomo) {
+      cfg = {
+        icon: '🎯', title: '休息结束',
+        desc: '准备好进入下一段专注了吗？', detail: '',
+        action: '开始专注 →', kind: 'breakEnd',
+        notifTitle: '休息结束', notifBody: '准备开始下一轮专注 💪'
+      };
+    } else {
+      cfg = {
+        icon: '⏱', title: '计时完成！',
+        desc: '这一段计时已经结束，要不要再来一段？',
+        detail: elapsedMin > 0 ? '本次 ' + elapsedMin + ' 分钟 · 今天累计 ' + todayMin + ' 分钟' : '',
+        action: '再来一段 →', kind: 'focusEnd',
+        notifTitle: '计时完成！', notifBody: '本次计时已结束 ⏱'
+      };
+    }
+    sendNotification(cfg.notifTitle, cfg.notifBody, { kind: cfg.kind });
+    showPhaseModal(cfg);
   }
 
   /* ==========================================
@@ -1549,7 +1654,7 @@
   function timerComplete(skipped) {
     closeShieldIfOpen();
     if (window.electronAPI && window.electronAPI.stopFocusMonitor) window.electronAPI.stopFocusMonitor();
-    if (!skipped) playCompleteSound();
+    // 提示音由 announcePhaseEnd 统一播放（区分专注结束 / 休息结束），避免与旧提示音叠加
 
     const focusPhases = ['work', 'custom', 'stopwatch'];
     const isFocus = focusPhases.includes(app.timer.phase);
@@ -1597,8 +1702,7 @@
         showToast('休息结束，继续加油 💪', 'success');
       }
     } else if (app.timer.mode === 'custom' && !skipped) {
-      showToast('⏱ 计时完成！', 'success');
-      app.timer.phase = 'custom';
+      app.timer.phase = 'custom'; // 由 announcePhaseEnd 统一弹出醒目提醒
     }
 
     initTimer();
@@ -1608,13 +1712,7 @@
     renderGrowth();
     renderAchievements();
 
-    if (!skipped) {
-      if (app.timer.mode === 'pomodoro' && app.timer.phase !== 'work') {
-        sendNotification('专注完成！', '休息一下吧，放松放松 🌿');
-      } else if (app.timer.mode === 'pomodoro') {
-        sendNotification('休息结束', '准备开始下一轮专注 💪');
-      }
-    }
+    if (!skipped) announcePhaseEnd(elapsedMin);
   }
 
   /* ---------- 专注质量采集与评分 ---------- */
@@ -2318,7 +2416,7 @@
     const peakEl = $('#setting-peak-remind');
 
     if (soundEl) soundEl.checked = s.soundEnabled !== false;
-    if (notifyEl) notifyEl.checked = s.notifEnabled === true;
+    if (notifyEl) notifyEl.checked = s.notifEnabled !== false;
     if (peakEl) peakEl.checked = s.peakRemindEnabled !== false;
     if (goalEl) goalEl.value = s.dailyFocusGoal || 120;
     if (workEl) workEl.value = s.pomodoroWork || 25;
@@ -2337,18 +2435,29 @@
       showToast(soundEl.checked ? '音效已开启 🔊' : '音效已关闭', 'success');
     });
 
-    // 通知开关
+    // 系统通知开关（桌面端为原生 Windows 弹窗，无需授权）
     const notifyEl = $('#setting-notify');
     if (notifyEl) notifyEl.addEventListener('change', () => {
       app.data.settings.notifEnabled = notifyEl.checked;
       saveState();
-      if (notifyEl.checked && 'Notification' in window) {
+      if (notifyEl.checked && !window.electronAPI && 'Notification' in window) {
         Notification.requestPermission().then(p => {
           showToast(p === 'granted' ? '通知已开启 🔔' : '浏览器拒绝了通知权限', p === 'granted' ? 'success' : 'warning');
         });
       } else {
-        showToast(notifyEl.checked ? '通知已开启 🔔' : '通知已关闭', 'success');
+        showToast(notifyEl.checked ? '系统弹窗已开启 🔔' : '系统弹窗已关闭', 'success');
       }
+    });
+
+    // 试听：让用户能立刻确认声音链路没坏
+    const testSound = $('#btn-test-sound');
+    if (testSound) testSound.addEventListener('click', () => {
+      if (!app.data.settings.soundEnabled) {
+        showToast('「提示音效」当前是关着的，先打开它再试听', 'warning');
+        return;
+      }
+      playPhaseSound('focusEnd');
+      showToast('已播放阶段结束提示音 🔊', 'success');
     });
 
     // 高效时段提醒开关
@@ -3362,6 +3471,7 @@
     initShield();
     initDistractionSettings();
     initSettingsCollapse();
+    initPhaseModal();
     initBackupUI();
     initBackup(); // 内部按检测结果决定是否弹新手引导，避免与恢复弹窗叠加
     initPeakReminder();
@@ -3386,8 +3496,8 @@
       if (app.ui.currentView === 'today') renderNextReminder();
     }, 60000);
 
-    // 通知引导
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    // 通知引导（仅浏览器预览需要 HTML5 权限；桌面端用主进程原生通知，不必引导）
+    if (!window.electronAPI && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       const banner = document.createElement('div');
       banner.className = 'notif-banner';
       banner.innerHTML = '<span>🔔 开启通知提醒，不再错过重要日程</span><button id="banner-enable-notif">立即开启</button>';
