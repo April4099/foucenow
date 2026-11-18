@@ -563,15 +563,103 @@ ipcMain.handle('get-version', () => {
 
 /* ========== 自托管下载与安装（api.github.com assets 接口，绕开 github.com） ========== */
 let downloadInProgress = false;
+let downloadCancelled = false;
 
 function downloadedExePath(version) {
   return path.join(updateCacheDir(), 'FocusNow-Setup-' + version + '.exe');
 }
 
+const REPO_OWNER = 'April4099';
+const REPO_NAME = 'foucenow';
+
+// 多个下载通道：国内镜像优先（github.com 在国内常被限速到几 KB/s）
+// fileName 形如 FocusNow-Setup-1.12.3.exe，需还原成 tag v1.12.3 + 文件名
+function downloadUrls(fileName) {
+  const name = /^FocusNow-Setup-([\d.]+)\.exe$/i.test(fileName)
+    ? fileName
+    : 'FocusNow-Setup-' + String(latestRelease && latestRelease.version || '').replace(/^v/, '') + '.exe';
+  const verMatch = name.match(/^FocusNow-Setup-([\d.]+)\.exe$/i);
+  const tag = verMatch ? 'v' + verMatch[1] : 'v' + String(latestRelease && latestRelease.version || '').replace(/^v/, '');
+  const gh = 'https://github.com/' + REPO_OWNER + '/' + REPO_NAME + '/releases/download/' + tag + '/' + name;
+  return [
+    'https://ghfast.top/' + gh,
+    'https://gh-proxy.com/' + gh,
+    gh,
+    GH_API_ASSET(latestRelease && latestRelease.assetId)
+  ].filter(Boolean);
+}
+
+function emitProgress(percent, transferredMB, totalMB, speedKB) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-progress', {
+      percent, transferred: transferredMB, total: totalMB, speed: speedKB
+    });
+  }
+}
+
+// 测速：拉取前 256KB，算 KB/s；失败返回 -1
+async function probeSpeed(url, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  const start = Date.now();
+  try {
+    const resp = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { 'Range': 'bytes=0-262143', 'User-Agent': 'FocusNow-Updater' }
+    });
+    if (!resp.ok && resp.status !== 206) return -1;
+    const buf = await resp.arrayBuffer();
+    const sec = (Date.now() - start) / 1000;
+    return sec > 0 ? (buf.byteLength / sec) / 1024 : -1;
+  } catch (e) {
+    return -1;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function downloadFromUrl(url, target, total, startAt, ctrl) {
+  const headers = { 'User-Agent': 'FocusNow-Updater' };
+  if (startAt > 0) headers['Range'] = 'bytes=' + startAt + '-';
+  const resp = await fetch(url, { signal: ctrl.signal, headers });
+  if (!resp.ok && resp.status !== 206) throw new Error('HTTP ' + resp.status);
+  // 断点续传：服务器忽略 Range（返回 200）时从头写
+  const resume = resp.status === 206 && startAt > 0;
+  const file = fs.createWriteStream(target, { flags: resume ? 'a' : 'w' });
+  let received = resume ? startAt : 0;
+  let lastPct = -1, lastEmit = 0, windowBytes = 0, windowStart = Date.now();
+
+  const rd = resp.body && resp.body.getReader;
+  if (!rd) {
+    const buf = Buffer.from(await resp.arrayBuffer());
+    await new Promise((resolve, reject) => fs.writeFile(target, buf, e => e ? reject(e) : resolve()));
+    return buf.length;
+  }
+  const reader = resp.body.getReader();
+  while (true) {
+    if (downloadCancelled) { file.destroy(); throw new Error('已取消'); }
+    const { done, value } = await reader.read();
+    if (done) break;
+    file.write(Buffer.from(value));
+    received += value.length;
+    windowBytes += value.length;
+    const now = Date.now();
+    const pct = total ? Math.min(100, Math.floor(received / total * 100)) : 0;
+    if (now - lastEmit >= 1000) {
+      const speed = Math.round((windowBytes / 1024) / ((now - windowStart) / 1000));
+      emitProgress(pct, Math.round(received / 1024 / 1024), Math.round(total / 1024 / 1024), speed);
+      windowBytes = 0; windowStart = now; lastEmit = now; lastPct = pct;
+    } else if (pct !== lastPct) {
+      lastPct = pct;
+    }
+  }
+  await new Promise((resolve, reject) => { file.end(resolve); file.on('error', reject); });
+  return received;
+}
+
 async function startUpdateDownload() {
   if (downloadInProgress) return;
   if (!latestRelease || !latestRelease.assetId) {
-    // 还没检查过，先拿一次版本信息
     try { latestRelease = await fetchLatestRelease(); }
     catch (err) {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-error', { message: err.message });
@@ -579,50 +667,48 @@ async function startUpdateDownload() {
     }
   }
   const info = latestRelease;
-  if (!info.assetId) {
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-error', { message: '安装包信息缺失' });
+  if (!info.version) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-error', { message: '版本信息缺失' });
     return;
   }
   downloadInProgress = true;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10 * 60 * 1000); // 安装包约 80MB，给足时间
+  downloadCancelled = false;
+  const target = downloadedExePath(info.version);
+  const total = info.assetSize || 82 * 1024 * 1024;
+  const urls = downloadUrls(info.assetName || ('FocusNow-Setup-' + info.version + '.exe'));
+
   try {
     fs.mkdirSync(updateCacheDir(), { recursive: true });
-    const target = downloadedExePath(info.version);
-    const resp = await fetch(GH_API_ASSET(info.assetId), {
-      signal: ctrl.signal,
-      headers: { 'User-Agent': 'FocusNow-Updater', 'Accept': 'application/octet-stream' }
-    });
-    if (!resp.ok) throw new Error('下载失败 HTTP ' + resp.status);
-    const total = info.assetSize || Number(resp.headers.get('content-length')) || 0;
-    const reader = resp.body && resp.body.getReader;
-    const file = fs.createWriteStream(target);
-    let received = 0, lastPct = -1;
+    emitProgress(0, 0, Math.round(total / 1024 / 1024), 0);
 
-    if (reader) {
-      const rd = resp.body.getReader();
-      while (true) {
-        const { done, value } = await rd.read();
-        if (done) break;
-        file.write(Buffer.from(value));
-        received += value.length;
-        const pct = total ? Math.floor(received / total * 100) : 0;
-        if (pct !== lastPct && mainWindow && !mainWindow.isDestroyed()) {
-          lastPct = pct;
-          mainWindow.webContents.send('update-progress', {
-            percent: pct,
-            transferred: Math.round(received / 1024 / 1024),
-            total: Math.round(total / 1024 / 1024)
-          });
-        }
+    // 测速选最快通道（6 秒上限；镜像通常 1-2 秒就能返回）
+    const speeds = await Promise.all(urls.map(u => probeSpeed(u, 6000)));
+    console.log('[更新] 通道测速(KB/s):', speeds.map((s, i) => urls[i].split('/')[2] + '=' + Math.round(s)).join(', '));
+    const viable = urls.map((u, i) => ({ u, s: speeds[i] })).filter(x => x.s > 20).sort((a, b) => b.s - a.s);
+    const ordered = viable.length ? viable.map(x => x.u) : urls;
+
+    let ok = false, lastErr = null;
+    for (let attempt = 0; attempt < ordered.length * 2 && !downloadCancelled; attempt++) {
+      const url = ordered[attempt % ordered.length];
+      const startAt = fs.existsSync(target) ? fs.statSync(target).size : 0;
+      if (startAt >= total) { ok = true; break; }
+      // 按剩余量与最低 30KB/s 估算超时，至少 3 分钟
+      const need = Math.max(3 * 60 * 1000, ((total - startAt) / 1024 / 30) * 1000);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), need);
+      try {
+        const got = await downloadFromUrl(url, target, total, startAt, ctrl);
+        clearTimeout(timer);
+        if (got >= total) { ok = true; break; }
+        lastErr = new Error('下载中断于 ' + Math.round(got / total * 100) + '%');
+      } catch (e) {
+        clearTimeout(timer);
+        lastErr = e;
+        console.log('[更新] 通道失败', url.split('/')[2], e.message);
       }
-      await new Promise((resolve, reject) => { file.end(resolve); file.on('error', reject); });
-    } else {
-      const buf = Buffer.from(await resp.arrayBuffer());
-      await new Promise((resolve, reject) => fs.writeFile(target, buf, e => e ? reject(e) : resolve()));
     }
+    if (!ok) throw lastErr || new Error('所有下载通道均失败');
 
-    clearTimeout(timer);
     downloadInProgress = false;
     updaterHasDownload = true;
     savePendingInstall({ version: info.version, notes: info.notes });
@@ -636,11 +722,11 @@ async function startUpdateDownload() {
       doInstall(target);
       return;
     }
+    emitProgress(100, Math.round(total / 1024 / 1024), Math.round(total / 1024 / 1024), 0);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('update-downloaded', { version: info.version, notes: info.notes });
     }
   } catch (err) {
-    clearTimeout(timer);
     downloadInProgress = false;
     console.log('[更新] 下载失败:', err.message);
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -668,6 +754,13 @@ function doInstall(exePath) {
 ipcMain.handle('update-start-download', () => {
   startUpdateDownload();
   return { status: 'downloading' };
+});
+
+/* 取消下载：保留已下载部分，下次可断点续传 */
+ipcMain.handle('update-cancel-download', () => {
+  downloadCancelled = true;
+  downloadInProgress = false;
+  return { status: 'cancelled' };
 });
 
 /* 渲染端点击「立即重启」→ 退出并安装已下载的更新 */

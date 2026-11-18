@@ -3319,6 +3319,7 @@
   let openUpdateModalForPending = null; // 由 initUpdateUI 注入（renderModal 在其闭包内）
   let manualCheck = false;              // 区分「用户主动检查」与「启动自动检查」
   let checkTimeout = null;              // 主动检查的超时兜底：网络失败也要给用户反馈
+  let downloadActive = false;           // 后台下载中（点侧栏可重开进度弹窗）
 
   function clearManualCheck() {
     manualCheck = false;
@@ -3406,9 +3407,13 @@
       } else if (opts.mode === 'downloading') {
         iconEl.textContent = '⬇️';
         titleEl.textContent = '正在下载更新';
-        subEl.textContent = `v${opts.version} 下载中…`;
+        subEl.textContent = `v${opts.version} 下载中… 可后台进行，进度会保留`;
         progWrap.style.display = '';
-        actionsEl.style.display = 'none';
+        actionsEl.style.display = 'flex';
+        btnLater.style.display = '';
+        btnLater.textContent = '后台下载';
+        btnMain.textContent = '取消下载';
+        btnMain.dataset.action = 'cancel-download';
         progFill.style.width = '0%';
         progText.textContent = '准备下载… 0%';
       } else if (opts.mode === 'downloaded') {
@@ -3481,6 +3486,10 @@
             else if (r && r.status === 'no-update') showToast('没有待安装的更新，请重新检查更新', 'warning');
           }).catch(() => {});
         }
+      } else if (action === 'cancel-download') {
+        if (window.electronAPI && window.electronAPI.cancelUpdateDownload) window.electronAPI.cancelUpdateDownload();
+        showToast('已取消下载，下次检查可继续（已下载部分会保留）', 'info');
+        closeModal('modal-update');
       } else if (action === 'close') {
         closeModal('modal-update');
       }
@@ -3488,6 +3497,8 @@
     btnLater.addEventListener('click', () => {
       if (btnMain.dataset.action === 'restart') {
         showToast('更新已就绪，可从侧栏版本号或托盘随时安装', 'info');
+      } else if (btnMain.dataset.action === 'cancel-download') {
+        showToast('正在后台下载，点侧栏版本号可查看进度', 'info');
       }
       closeModal('modal-update');
     });
@@ -3501,14 +3512,20 @@
         refreshUpdateIndicators();
         renderModal({ mode: 'available', version: d.version, currentVersion: d.currentVersion, notes: d.notes });
       } else if (type === 'update-progress') {
+        downloadActive = true;
         if (progWrap.style.display !== 'none') {
           const pct = d.percent || 0;
           progFill.style.width = pct + '%';
           const speed = d.speed || 0;
-          progText.textContent = `下载中… ${pct}%  ·  ${speed} KB/s`;
+          const speedText = speed >= 1024 ? (Math.round(speed / 1024 * 10) / 10) + ' MB/s' : speed + ' KB/s';
+          progText.textContent = `下载中… ${pct}%  ·  ${d.transferred || 0}/${d.total || 0} MB  ·  ${speedText}`;
         }
+        // 后台下载时更新侧栏角标提示
+        const badge = $('#sidebar-version');
+        if (badge) badge.title = '更新下载中 ' + (d.percent || 0) + '% · 点击查看';
       } else if (type === 'update-downloaded') {
         clearManualCheck();
+        downloadActive = false;
         updateCtx.version = d.version;
         updatePending = { version: d.version, notes: d.notes || '' };
         updateFound = false;
@@ -3548,6 +3565,7 @@
       if (api.onUpdateDownloaded) api.onUpdateDownloaded(d => handleUpdateEvent('update-downloaded', d));
       if (api.onUpdateDone) api.onUpdateDone(d => handleUpdateEvent('update-done', d));
       if (api.onUpdateError) api.onUpdateError(() => {
+        downloadActive = false;
         if (!manualCheck) return; // 启动时自动检查失败不打扰，只有主动检查才弹
         clearManualCheck();
         renderModal({ mode: 'failed' });
@@ -3594,11 +3612,15 @@
           setTimeout(() => { btnCheck.disabled = false; btnCheck.textContent = orig; }, 1500);
         });
       }
-      // 侧栏常驻版本号：点击即可回到安装入口 / 主动检查
+      // 侧栏常驻版本号：点击即可回到安装入口 / 主动检查 / 查看下载进度
       const badge = $('#sidebar-version');
       if (badge) badge.addEventListener('click', () => {
-        if (updatePending) openUpdateModalForPending();
-        else requestCheck();
+        if (updatePending) { openUpdateModalForPending(); return; }
+        if (downloadActive) {
+          renderModal({ mode: 'downloading', version: updateCtx.version });
+          return;
+        }
+        requestCheck();
       });
       // 设置页「待安装更新」按钮
       const btnInstall = $('#btn-install-pending');

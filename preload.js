@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pullUpdateEvent: () => ipcRenderer.invoke('pull-update-event'),
   // 渲染端触发下载 / 重启安装
   startUpdateDownload: () => ipcRenderer.invoke('update-start-download'),
+  cancelUpdateDownload: () => ipcRenderer.invoke('update-cancel-download'),
   restartToUpdate: () => ipcRenderer.invoke('update-restart'),
   // 当前版本 / 待安装更新状态（侧栏与设置页常驻入口用）
   getUpdateState: () => ipcRenderer.invoke('get-update-state'),
