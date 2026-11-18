@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (event, data) => callback(data)),
   onUpdateDone: (callback) => ipcRenderer.on('update-done', (event, data) => callback(data)),
   onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', () => callback()),
+  onUpdateError: (callback) => ipcRenderer.on('update-error', (event, data) => callback(data)),
   // 渲染端主动拉取可能错过的事件
   pullUpdateEvent: () => ipcRenderer.invoke('pull-update-event'),
   // 渲染端触发下载 / 重启安装

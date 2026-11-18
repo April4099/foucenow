@@ -542,6 +542,10 @@ autoUpdater.on('error', (err) => {
   // 检查/下载失败时复位标记，否则会把用户之后手动「检查更新」也吞成静默流程
   silentRecheck = false;
   installAfterDownload = false;
+  // 通知渲染端：主动检查失败要立刻给反馈，而不是让按钮看起来没反应
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-error', { message: err.message || '未知错误' });
+  }
 });
 
 /* ========== IPC 通信（供渲染进程调用） ========== */

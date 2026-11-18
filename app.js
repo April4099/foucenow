@@ -3317,6 +3317,13 @@
   let updateFound = false;         // 发现有新版本
   let currentAppVersion = '';
   let openUpdateModalForPending = null; // 由 initUpdateUI 注入（renderModal 在其闭包内）
+  let manualCheck = false;              // 区分「用户主动检查」与「启动自动检查」
+  let checkTimeout = null;              // 主动检查的超时兜底：网络失败也要给用户反馈
+
+  function clearManualCheck() {
+    manualCheck = false;
+    if (checkTimeout) { clearTimeout(checkTimeout); checkTimeout = null; }
+  }
 
   function refreshUpdateIndicators() {
     const badge = $('#sidebar-version');
@@ -3423,6 +3430,28 @@
         btnLater.style.display = 'none';
         btnMain.textContent = '好';
         btnMain.dataset.action = 'close';
+      } else if (opts.mode === 'latest') {
+        // 用户主动检查、但已是最新版：给一个明确弹窗，而不是一闪而过的 toast
+        iconEl.textContent = '✅';
+        titleEl.textContent = '已是最新版本';
+        subEl.textContent = `v${opts.version || currentAppVersion} 就是最新版，无需更新`;
+        notesEl.textContent = '当前已是最新，可以安心继续专注。';
+        progWrap.style.display = 'none';
+        actionsEl.style.display = 'flex';
+        btnLater.style.display = 'none';
+        btnMain.textContent = '好';
+        btnMain.dataset.action = 'close';
+      } else if (opts.mode === 'failed') {
+        // 检查请求超时 / 网络失败：不能静默收场，否则看起来像按钮坏了
+        iconEl.textContent = '⚠️';
+        titleEl.textContent = '检查更新失败';
+        subEl.textContent = '连不上更新服务器，请检查网络后重试';
+        notesEl.textContent = '你的数据不受影响，仍可离线使用。稍后可从设置里重新检查。';
+        progWrap.style.display = 'none';
+        actionsEl.style.display = 'flex';
+        btnLater.style.display = 'none';
+        btnMain.textContent = '知道了';
+        btnMain.dataset.action = 'close';
       }
       openModal('modal-update');
     }
@@ -3466,6 +3495,7 @@
     // 统一分发来自主进程的更新事件
     function handleUpdateEvent(type, d) {
       if (type === 'update-available') {
+        clearManualCheck();
         updateCtx.version = d.version;
         updateFound = true;
         refreshUpdateIndicators();
@@ -3478,12 +3508,14 @@
           progText.textContent = `下载中… ${pct}%  ·  ${speed} KB/s`;
         }
       } else if (type === 'update-downloaded') {
+        clearManualCheck();
         updateCtx.version = d.version;
         updatePending = { version: d.version, notes: d.notes || '' };
         updateFound = false;
         refreshUpdateIndicators();
         renderModal({ mode: 'downloaded', version: d.version, notes: d.notes });
       } else if (type === 'update-done') {
+        clearManualCheck();
         updateCtx.version = d.version;
         updatePending = null;
         updateFound = false;
@@ -3492,17 +3524,46 @@
       }
     }
 
-    const api = window.electronAPI;
-    if (api) {
-      if (api.onUpdateAvailable) api.onUpdateAvailable(d => handleUpdateEvent('update-available', d));
+      const api = window.electronAPI;
+      if (api) {
+        // 主动检查：无论结果是「有更新 / 已最新 / 失败」都给明确反馈，不让按钮看起来失灵
+        function requestCheck() {
+          if (!api.checkUpdate) return;
+          if (checkTimeout) clearTimeout(checkTimeout);
+          manualCheck = true;
+          checkTimeout = setTimeout(() => {
+            if (!manualCheck) return;
+            manualCheck = false;
+            checkTimeout = null;
+            renderModal({ mode: 'failed' });
+          }, 12000);
+          api.checkUpdate().catch(() => {
+            clearManualCheck();
+            renderModal({ mode: 'failed' });
+          });
+        }
+
+        if (api.onUpdateAvailable) api.onUpdateAvailable(d => handleUpdateEvent('update-available', d));
       if (api.onUpdateProgress) api.onUpdateProgress(d => handleUpdateEvent('update-progress', d));
       if (api.onUpdateDownloaded) api.onUpdateDownloaded(d => handleUpdateEvent('update-downloaded', d));
       if (api.onUpdateDone) api.onUpdateDone(d => handleUpdateEvent('update-done', d));
+      if (api.onUpdateError) api.onUpdateError(() => {
+        if (!manualCheck) return; // 启动时自动检查失败不打扰，只有主动检查才弹
+        clearManualCheck();
+        renderModal({ mode: 'failed' });
+      });
       if (api.onUpdateNotAvailable) api.onUpdateNotAvailable(() => {
+        const wasManual = manualCheck;
+        clearManualCheck();
         updateFound = false;
         updatePending = null;
         refreshUpdateIndicators();
-        showToast('已是最新版本 ✓', 'success');
+        if (wasManual) {
+          renderModal({ mode: 'latest', version: currentAppVersion || updateCtx.version });
+        } else {
+          // 启动时的自动检查：保持轻量，不弹窗打扰
+          showToast('已是最新版本 ✓', 'success');
+        }
       });
       // 补拉可能错过的事件（主进程已检查但渲染端尚未就绪）
       if (api.pullUpdateEvent) {
@@ -3529,16 +3590,15 @@
           btnCheck.disabled = true;
           const orig = btnCheck.textContent;
           btnCheck.textContent = '检查中…';
-          api.checkUpdate().catch(() => {}).then(() => {
-            setTimeout(() => { btnCheck.disabled = false; btnCheck.textContent = orig; }, 1500);
-          });
+          requestCheck();
+          setTimeout(() => { btnCheck.disabled = false; btnCheck.textContent = orig; }, 1500);
         });
       }
-      // 侧栏常驻版本号：点击即可回到安装入口
+      // 侧栏常驻版本号：点击即可回到安装入口 / 主动检查
       const badge = $('#sidebar-version');
       if (badge) badge.addEventListener('click', () => {
         if (updatePending) openUpdateModalForPending();
-        else if (api.checkUpdate) api.checkUpdate();
+        else requestCheck();
       });
       // 设置页「待安装更新」按钮
       const btnInstall = $('#btn-install-pending');
