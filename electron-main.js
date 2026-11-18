@@ -53,7 +53,60 @@ if (!gotLock) {
 
 /* ========== 自动更新配置 ========== */
 autoUpdater.autoDownload = false; // 不自动下载，先问用户
-autoUpdater.autoInstallOnAppQuit = true; // 退出时自动安装
+// 关闭 autoUpdater 的退出安装：它由 github.com 下载，在国内网络下常超时。
+// 我们改用 api.github.com 自己检查/下载/安装（见下方 GH_API_* 实现）。
+autoUpdater.autoInstallOnAppQuit = false;
+
+/* ========== 自托管更新通道（走 api.github.com，绕开常不通的 github.com） ========== */
+const GH_API_LATEST = 'https://api.github.com/repos/April4099/foucenow/releases/latest';
+const GH_API_ASSET = (id) => `https://api.github.com/repos/April4099/foucenow/releases/assets/${id}`;
+const UPDATE_TIMEOUT_MS = 20000;
+let latestRelease = null;   // { version, notes, assetId, assetName, assetSize }
+let updateDir = null;
+
+function updateCacheDir() {
+  if (!updateDir) updateDir = path.join(app.getPath('userData'), 'update-cache');
+  return updateDir;
+}
+
+function parseVersion(v) {
+  const m = String(v || '').match(/^(\d+)\.(\d+)\.(\d+)/);
+  return m ? [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)] : [0, 0, 0];
+}
+function compareVersions(a, b) {
+  const x = parseVersion(a), y = parseVersion(b);
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1;
+  return 0;
+}
+
+async function apiFetchJson(url) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), UPDATE_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'FocusNow-Updater', 'Accept': 'application/vnd.github+json' }
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function fetchLatestRelease() {
+  const j = await apiFetchJson(GH_API_LATEST);
+  const version = String(j.tag_name || '').replace(/^v/, '');
+  const assets = (j.assets || []).map(a => ({ id: a.id, name: a.name, size: a.size }));
+  const exe = assets.find(a => /\.exe$/i.test(a.name) && !/blockmap/i.test(a.name)) || null;
+  return {
+    version,
+    notes: formatNotes({ releaseNotes: j.body || '' }),
+    assetId: exe ? exe.id : null,
+    assetName: exe ? exe.name : null,
+    assetSize: exe ? exe.size : 0
+  };
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -389,16 +442,47 @@ ipcMain.handle('show-notification', (e, payload) => {
   } catch (err) { return { ok: false, reason: err.message }; }
 });
 
-/* ========== 更新检查 ========== */
-function checkForUpdates() {
-  // 开发模式不检查更新
+/* ========== 更新检查（走 api.github.com） ========== */
+async function checkForUpdates() {
   if (!app.isPackaged) {
     console.log('[更新] 开发模式，跳过更新检查');
     return;
   }
-  autoUpdater.checkForUpdates().catch(err => {
+  try {
+    const info = await fetchLatestRelease();
+    latestRelease = info;
+    const hasUpdate = compareVersions(info.version, app.getVersion()) > 0;
+    if (!hasUpdate) {
+      if (installAfterDownload) {
+        installAfterDownload = false;
+        savePendingInstall(null);
+      }
+      silentRecheck = false;
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-not-available');
+      return;
+    }
+    updateAvailable = true;
+    if (silentRecheck || installAfterDownload) {
+      silentRecheck = false;
+      if (!pendingInstall || pendingInstall.version !== info.version) {
+        savePendingInstall({ version: info.version, notes: info.notes });
+      }
+      startUpdateDownload(); // 启动恢复：直接下载
+      return;
+    }
+    pushUpdateEvent('update-available', {
+      version: info.version,
+      currentVersion: app.getVersion(),
+      notes: info.notes
+    });
+  } catch (err) {
     console.log('[更新] 检查失败:', err.message);
-  });
+    silentRecheck = false;
+    installAfterDownload = false;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', { message: err.message || '未知错误' });
+    }
+  }
 }
 
 /* ========== 把 release notes 整理成可读文本 ========== */
@@ -424,77 +508,6 @@ function formatNotes(info) {
   if (notes.length > 1400) notes = notes.slice(0, 1400) + '\n…（完整说明见 GitHub Release）';
   return notes;
 }
-
-autoUpdater.on('update-available', (info) => {
-  updateAvailable = true;
-  const currentVersion = app.getVersion();
-  const notes = formatNotes(info);
-  // 启动恢复 / 用户点了「立即重启」但本进程内还没有下载包：
-  // 直接复用本地缓存重新下载（秒完成），不再弹「发现新版本」让用户再点一次
-  if (silentRecheck || installAfterDownload) {
-    silentRecheck = false;
-    if (!pendingInstall || pendingInstall.version !== info.version) {
-      savePendingInstall({ version: info.version, notes });
-    }
-    autoUpdater.downloadUpdate().catch(() => { installAfterDownload = false; });
-    return;
-  }
-  pushUpdateEvent('update-available', {
-    version: info.version,
-    currentVersion,
-    notes
-  });
-});
-
-autoUpdater.on('update-not-available', () => {
-  console.log('[更新] 已是最新版本');
-  if (installAfterDownload) {
-    installAfterDownload = false;
-    savePendingInstall(null); // 服务器上已没有更新，说明本地其实已装好
-  }
-  silentRecheck = false;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('update-not-available');
-  }
-});
-
-autoUpdater.on('download-progress', (progress) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('update-progress', {
-      percent: Math.round(progress.percent),
-      speed: Math.round(progress.bytesPerSecond / 1024),
-      transferred: Math.round(progress.transferred / 1024 / 1024),
-      total: Math.round(progress.total / 1024 / 1024)
-    });
-  }
-});
-
-autoUpdater.on('update-downloaded', (info) => {
-  const notes = formatNotes(info);
-  updaterHasDownload = true;
-  // 记录「已下载但未安装」：✕ 是挂后台不退出、点「稍后重启」也不会自动装，
-  // 必须持久化，否则下次启动就再也找不到安装入口了
-  savePendingInstall({ version: info.version, notes });
-  // 记录到 userData，下一次启动（新版本）时弹出"本次更新内容"
-  try {
-    fs.writeFileSync(
-      path.join(app.getPath('userData'), '.pending-update.json'),
-      JSON.stringify({ version: info.version, notes })
-    );
-  } catch (e) { /* 忽略写入失败 */ }
-
-  // 用户此前点了「立即重启」→ 下载一完成就立刻安装
-  if (installAfterDownload) {
-    installAfterDownload = false;
-    isQuitting = true;
-    autoUpdater.quitAndInstall();
-    return;
-  }
-  pushUpdateEvent('update-downloaded', {
-    version: info.version,
-    notes
-  });
-});
 
 /* ========== 启动后检查“上一次更新”并弹窗告知本次更新内容 ========== */
 function checkPendingUpdate() {
@@ -537,21 +550,10 @@ function checkPendingUpdate() {
   }, 1200);
 }
 
-autoUpdater.on('error', (err) => {
-  console.log('[更新] 错误:', err.message);
-  // 检查/下载失败时复位标记，否则会把用户之后手动「检查更新」也吞成静默流程
-  silentRecheck = false;
-  installAfterDownload = false;
-  // 通知渲染端：主动检查失败要立刻给反馈，而不是让按钮看起来没反应
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('update-error', { message: err.message || '未知错误' });
-  }
-});
-
 /* ========== IPC 通信（供渲染进程调用） ========== */
 ipcMain.handle('check-update', () => {
   if (!app.isPackaged) return { status: 'dev' };
-  autoUpdater.checkForUpdates().catch(() => {});
+  checkForUpdates();
   return { status: 'checking' };
 });
 
@@ -559,25 +561,127 @@ ipcMain.handle('get-version', () => {
   return app.getVersion();
 });
 
-/* 渲染端点击「立即更新」→ 开始联网下载 */
+/* ========== 自托管下载与安装（api.github.com assets 接口，绕开 github.com） ========== */
+let downloadInProgress = false;
+
+function downloadedExePath(version) {
+  return path.join(updateCacheDir(), 'FocusNow-Setup-' + version + '.exe');
+}
+
+async function startUpdateDownload() {
+  if (downloadInProgress) return;
+  if (!latestRelease || !latestRelease.assetId) {
+    // 还没检查过，先拿一次版本信息
+    try { latestRelease = await fetchLatestRelease(); }
+    catch (err) {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-error', { message: err.message });
+      return;
+    }
+  }
+  const info = latestRelease;
+  if (!info.assetId) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-error', { message: '安装包信息缺失' });
+    return;
+  }
+  downloadInProgress = true;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10 * 60 * 1000); // 安装包约 80MB，给足时间
+  try {
+    fs.mkdirSync(updateCacheDir(), { recursive: true });
+    const target = downloadedExePath(info.version);
+    const resp = await fetch(GH_API_ASSET(info.assetId), {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'FocusNow-Updater', 'Accept': 'application/octet-stream' }
+    });
+    if (!resp.ok) throw new Error('下载失败 HTTP ' + resp.status);
+    const total = info.assetSize || Number(resp.headers.get('content-length')) || 0;
+    const reader = resp.body && resp.body.getReader;
+    const file = fs.createWriteStream(target);
+    let received = 0, lastPct = -1;
+
+    if (reader) {
+      const rd = resp.body.getReader();
+      while (true) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        file.write(Buffer.from(value));
+        received += value.length;
+        const pct = total ? Math.floor(received / total * 100) : 0;
+        if (pct !== lastPct && mainWindow && !mainWindow.isDestroyed()) {
+          lastPct = pct;
+          mainWindow.webContents.send('update-progress', {
+            percent: pct,
+            transferred: Math.round(received / 1024 / 1024),
+            total: Math.round(total / 1024 / 1024)
+          });
+        }
+      }
+      await new Promise((resolve, reject) => { file.end(resolve); file.on('error', reject); });
+    } else {
+      const buf = Buffer.from(await resp.arrayBuffer());
+      await new Promise((resolve, reject) => fs.writeFile(target, buf, e => e ? reject(e) : resolve()));
+    }
+
+    clearTimeout(timer);
+    downloadInProgress = false;
+    updaterHasDownload = true;
+    savePendingInstall({ version: info.version, notes: info.notes });
+    try {
+      fs.writeFileSync(path.join(app.getPath('userData'), '.pending-update.json'),
+        JSON.stringify({ version: info.version, notes: info.notes }));
+    } catch (e) { /* ignore */ }
+
+    if (installAfterDownload) {
+      installAfterDownload = false;
+      doInstall(target);
+      return;
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-downloaded', { version: info.version, notes: info.notes });
+    }
+  } catch (err) {
+    clearTimeout(timer);
+    downloadInProgress = false;
+    console.log('[更新] 下载失败:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', { message: err.message || '下载失败' });
+    }
+  }
+}
+
+function doInstall(exePath) {
+  // NSIS oneClick 安装包：/S 静默安装；spawn 分离进程，主程序退出后继续安装
+  const cp = require('child_process');
+  try {
+    const child = cp.spawn(exePath, ['/S'], { detached: true, stdio: 'ignore', windowsHide: true });
+    child.unref();
+    isQuitting = true;
+    setTimeout(() => app.quit(), 300);
+  } catch (err) {
+    console.log('[更新] 启动安装器失败:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', { message: '启动安装器失败：' + err.message });
+    }
+  }
+}
+
 ipcMain.handle('update-start-download', () => {
-  autoUpdater.downloadUpdate();
+  startUpdateDownload();
   return { status: 'downloading' };
 });
 
 /* 渲染端点击「立即重启」→ 退出并安装已下载的更新 */
 ipcMain.handle('update-restart', () => {
-  // 本进程内已有下载包 → 直接装
-  if (updaterHasDownload) {
-    isQuitting = true;
-    autoUpdater.quitAndInstall();
+  // 已下载到本机 → 直接装（覆盖安装，数据目录不变）
+  const version = (latestRelease && latestRelease.version) || (pendingInstall && pendingInstall.version);
+  if (version && fs.existsSync(downloadedExePath(version))) {
+    doInstall(downloadedExePath(version));
     return { status: 'restarting' };
   }
-  // 用户重启过软件、或当初点了「稍后重启」：autoUpdater 内部状态已丢失。
-  // 重新 check + download（命中本地缓存，秒完成），下载完在事件里自动 quitAndInstall
+  // 没下载过但知道有新版本 → 先下载，完成后自动安装
   if (app.isPackaged && pendingInstall) {
     installAfterDownload = true;
-    autoUpdater.checkForUpdates().catch(() => { installAfterDownload = false; });
+    startUpdateDownload();
     return { status: 'preparing' };
   }
   return { status: 'no-update' };
