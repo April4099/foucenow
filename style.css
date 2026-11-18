@@ -2669,3 +2669,40 @@ body, .sidebar, .app-header {
     scroll-behavior: auto !important;
   }
 }
+
+/* ========== 侧栏常驻版本号 + 更新状态 ========== */
+.sidebar-version {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 10px auto 4px; padding: 4px 12px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--text-muted);
+  font-family: inherit; font-size: 0.7rem; letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color var(--dur-fast, 0.18s) var(--ease-out, ease-out),
+              color var(--dur-fast, 0.18s) var(--ease-out, ease-out),
+              background var(--dur-fast, 0.18s) var(--ease-out, ease-out);
+}
+.sidebar-version:hover { border-color: var(--primary); color: var(--primary); }
+.ver-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--success, #4ade80); flex: none;
+}
+.sidebar-version.has-update {
+  color: var(--warning, #fbbf24);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+.sidebar-version.has-update .ver-dot { background: var(--warning, #fbbf24); }
+.sidebar-version.pending {
+  color: var(--primary); border-color: var(--primary);
+  background: rgba(255, 46, 126, 0.08);
+}
+.sidebar-version.pending .ver-dot {
+  background: var(--primary);
+  box-shadow: 0 0 0 3px rgba(255, 46, 126, 0.18);
+}
+
+/* 设置页「待安装更新」入口 */
+.update-pending-btn {
+  display: block; width: 100%; margin-top: 10px;
+  border-radius: 10px; font-weight: 600;
+}

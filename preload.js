@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 渲染端触发下载 / 重启安装
   startUpdateDownload: () => ipcRenderer.invoke('update-start-download'),
   restartToUpdate: () => ipcRenderer.invoke('update-restart'),
+  // 当前版本 / 待安装更新状态（侧栏与设置页常驻入口用）
+  getUpdateState: () => ipcRenderer.invoke('get-update-state'),
+  // 托盘：渲染层上报今日专注与计时状态；接收托盘菜单命令
+  setTrayState: (state) => ipcRenderer.invoke('set-tray-state', state),
+  onTrayCommand: (callback) => ipcRenderer.on('tray-cmd', (event, type) => callback(type)),
   // 窗口控制
   winMin: () => ipcRenderer.invoke('win-min'),
   winMax: () => ipcRenderer.invoke('win-max'),

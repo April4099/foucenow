@@ -8,6 +8,26 @@ let tray = null;
 let isQuitting = false;
 let updateAvailable = false;
 let cachedUpdateEvent = null; // 缓冲最近一次更新事件，供渲染端错过后补拉
+let pendingInstall = null;    // { version, notes }：已下载但尚未安装（持久化到 userData）
+let updaterHasDownload = false; // autoUpdater 本进程内是否已有可安装的下载包
+let installAfterDownload = false; // 用户点了「立即重启」但需先重新下载（命中缓存）再安装
+let silentRecheck = false;    // 启动恢复流程：检查到新版本后自动下载，不弹「发现新版本」
+let trayState = { todayMin: 0, running: false }; // 由渲染层上报，用于托盘菜单
+
+const PENDING_INSTALL_FILE = () => path.join(app.getPath('userData'), '.pending-install.json');
+
+function savePendingInstall(d) {
+  pendingInstall = d ? { version: d.version, notes: d.notes || '' } : null;
+  try {
+    if (d) fs.writeFileSync(PENDING_INSTALL_FILE(), JSON.stringify(pendingInstall));
+    else if (fs.existsSync(PENDING_INSTALL_FILE())) fs.unlinkSync(PENDING_INSTALL_FILE());
+  } catch (e) { /* 忽略写入失败 */ }
+  updateTrayMenu();
+}
+
+function sendTrayCommand(type) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('tray-cmd', type);
+}
 
 /* 把更新事件发给渲染端；若渲染端尚未就绪，则先缓存，待其 pull 时补发 */
 function pushUpdateEvent(type, payload) {
@@ -76,34 +96,51 @@ function createWindow() {
 }
 
 /* ========== 系统托盘（挂后台后可唤回 / 完全退出） ========== */
-function createTray() {
-  tray = new Tray(path.join(__dirname, 'icon.png'));
-  tray.setToolTip('此刻 FocusNow（后台运行中）');
-  const menu = Menu.buildFromTemplate([
+function updateTrayMenu() {
+  if (!tray) return;
+  const t = [
+    { label: `今日专注 ${trayState.todayMin} 分钟`, enabled: false },
+    { type: 'separator' },
+    {
+      label: trayState.running ? '⏸ 暂停专注' : '▶ 开始专注',
+      click: () => {
+        if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+        sendTrayCommand('toggle-timer');
+      }
+    },
     {
       label: '打开主界面',
       click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
+        if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
       }
-    },
-    { type: 'separator' },
-    {
-      label: '完全退出',
+    }
+  ];
+  if (pendingInstall) {
+    t.push({ type: 'separator' });
+    t.push({
+      label: `⬆ 安装 v${pendingInstall.version}（重启生效）`,
       click: () => {
-        isQuitting = true;
-        app.quit();
+        if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
+        sendTrayCommand('install-update');
       }
-    }
-  ]);
-  tray.setContextMenu(menu);
+    });
+  }
+  t.push({ type: 'separator' });
+  t.push({
+    label: '完全退出',
+    click: () => { isQuitting = true; app.quit(); }
+  });
+  tray.setContextMenu(Menu.buildFromTemplate(t));
+  tray.setToolTip(pendingInstall
+    ? `此刻 FocusNow · 有更新 v${pendingInstall.version} 待安装`
+    : '此刻 FocusNow（后台运行中）');
+}
+
+function createTray() {
+  tray = new Tray(path.join(__dirname, 'icon.png'));
+  updateTrayMenu();
   tray.on('double-click', () => {
-    if (mainWindow) {
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    if (mainWindow) { mainWindow.show(); mainWindow.focus(); }
   });
 }
 
@@ -214,9 +251,11 @@ function buildFgScript() {
   return Buffer.from(script, 'utf16le').toString('base64');
 }
 
+let fgScriptB64 = null; // 只构造一次，避免每 3 秒重复编码
 function queryForegroundProcess() {
   if (process.platform !== 'win32') return Promise.resolve(null);
-  const b64 = buildFgScript();
+  if (!fgScriptB64) fgScriptB64 = buildFgScript();
+  const b64 = fgScriptB64;
   const cp = require('child_process');
   return new Promise((resolve) => {
     cp.execFile('powershell.exe',
@@ -230,20 +269,29 @@ function queryForegroundProcess() {
   });
 }
 
+let fgBusy = false;
 async function tickFg() {
-  const name = await queryForegroundProcess();
-  if (!name) { fgMonitor.lastDistract = false; return; }
-  const inAllow = fgMonitor.allow.some(a => name.indexOf(a) !== -1);
-  const isDistract = !inAllow && fgMonitor.apps.some(a => name.indexOf(a) !== -1);
-  if (isDistract) {
-    const entered = !fgMonitor.lastDistract;
-    fgMonitor.lastDistract = true;
-    // 按「停留时长」上报：每次轮询累加 FG_POLL_SEC 秒；entered 仅用于统计段数
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('focus-distraction-time', { seconds: FG_POLL_SEC, entered });
+  // 防重入：单次查询若超过轮询间隔，不允许多个 PowerShell 进程叠加
+  if (fgBusy || !fgMonitor.active) return;
+  fgBusy = true;
+  try {
+    const name = await queryForegroundProcess();
+    if (!fgMonitor.active) return; // 计时已结束，丢弃在途结果
+    if (!name) { fgMonitor.lastDistract = false; return; }
+    const inAllow = fgMonitor.allow.some(a => name.indexOf(a) !== -1);
+    const isDistract = !inAllow && fgMonitor.apps.some(a => name.indexOf(a) !== -1);
+    if (isDistract) {
+      const entered = !fgMonitor.lastDistract;
+      fgMonitor.lastDistract = true;
+      // 按「停留时长」上报：每次轮询累加 FG_POLL_SEC 秒；entered 仅用于统计段数
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('focus-distraction-time', { seconds: FG_POLL_SEC, entered });
+      }
+    } else {
+      fgMonitor.lastDistract = false;
     }
-  } else {
-    fgMonitor.lastDistract = false;
+  } finally {
+    fgBusy = false;
   }
 }
 
@@ -381,6 +429,16 @@ autoUpdater.on('update-available', (info) => {
   updateAvailable = true;
   const currentVersion = app.getVersion();
   const notes = formatNotes(info);
+  // 启动恢复 / 用户点了「立即重启」但本进程内还没有下载包：
+  // 直接复用本地缓存重新下载（秒完成），不再弹「发现新版本」让用户再点一次
+  if (silentRecheck || installAfterDownload) {
+    silentRecheck = false;
+    if (!pendingInstall || pendingInstall.version !== info.version) {
+      savePendingInstall({ version: info.version, notes });
+    }
+    autoUpdater.downloadUpdate().catch(() => { installAfterDownload = false; });
+    return;
+  }
   pushUpdateEvent('update-available', {
     version: info.version,
     currentVersion,
@@ -390,6 +448,11 @@ autoUpdater.on('update-available', (info) => {
 
 autoUpdater.on('update-not-available', () => {
   console.log('[更新] 已是最新版本');
+  if (installAfterDownload) {
+    installAfterDownload = false;
+    savePendingInstall(null); // 服务器上已没有更新，说明本地其实已装好
+  }
+  silentRecheck = false;
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('update-not-available');
   }
@@ -408,7 +471,11 @@ autoUpdater.on('download-progress', (progress) => {
 
 autoUpdater.on('update-downloaded', (info) => {
   const notes = formatNotes(info);
-  // 记录到 userData，下一次启动（新版本）时弹出“本次更新内容”
+  updaterHasDownload = true;
+  // 记录「已下载但未安装」：✕ 是挂后台不退出、点「稍后重启」也不会自动装，
+  // 必须持久化，否则下次启动就再也找不到安装入口了
+  savePendingInstall({ version: info.version, notes });
+  // 记录到 userData，下一次启动（新版本）时弹出"本次更新内容"
   try {
     fs.writeFileSync(
       path.join(app.getPath('userData'), '.pending-update.json'),
@@ -416,6 +483,13 @@ autoUpdater.on('update-downloaded', (info) => {
     );
   } catch (e) { /* 忽略写入失败 */ }
 
+  // 用户此前点了「立即重启」→ 下载一完成就立刻安装
+  if (installAfterDownload) {
+    installAfterDownload = false;
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+    return;
+  }
   pushUpdateEvent('update-downloaded', {
     version: info.version,
     notes
@@ -424,6 +498,28 @@ autoUpdater.on('update-downloaded', (info) => {
 
 /* ========== 启动后检查“上一次更新”并弹窗告知本次更新内容 ========== */
 function checkPendingUpdate() {
+  // ① 恢复「已下载但没安装」的更新
+  const pf = PENDING_INSTALL_FILE();
+  let installedVersion = null;
+  if (fs.existsSync(pf)) {
+    try {
+      const p = JSON.parse(fs.readFileSync(pf, 'utf8'));
+      if (p && p.version) {
+        if (p.version === app.getVersion()) {
+          // 已经装到该版本 → 清掉待安装标记，稍后弹「更新完成」
+          installedVersion = p.version;
+          savePendingInstall(null);
+        } else {
+          // 仍停在旧版本 → 启动 5 秒后静默重新下载（命中缓存），完成后直接提示安装
+          pendingInstall = { version: p.version, notes: p.notes || '' };
+          silentRecheck = true;
+          updateTrayMenu();
+        }
+      }
+    } catch (e) { /* 忽略损坏的标记文件 */ }
+  }
+
+  // ② 「本次更新内容」只有确认真的装好了才弹（旧逻辑下载完就写，会误报更新完成）
   const f = path.join(app.getPath('userData'), '.pending-update.json');
   if (!fs.existsSync(f)) return;
   let d;
@@ -431,6 +527,7 @@ function checkPendingUpdate() {
     d = JSON.parse(fs.readFileSync(f, 'utf8'));
     fs.unlinkSync(f); // 读取后即删除，避免重复提示
   } catch (e) { return; }
+  if (!installedVersion && pendingInstall) return; // 还没装，别误报
   setTimeout(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     pushUpdateEvent('update-done', {
@@ -442,6 +539,9 @@ function checkPendingUpdate() {
 
 autoUpdater.on('error', (err) => {
   console.log('[更新] 错误:', err.message);
+  // 检查/下载失败时复位标记，否则会把用户之后手动「检查更新」也吞成静默流程
+  silentRecheck = false;
+  installAfterDownload = false;
 });
 
 /* ========== IPC 通信（供渲染进程调用） ========== */
@@ -463,9 +563,37 @@ ipcMain.handle('update-start-download', () => {
 
 /* 渲染端点击「立即重启」→ 退出并安装已下载的更新 */
 ipcMain.handle('update-restart', () => {
-  isQuitting = true;
-  autoUpdater.quitAndInstall();
-  return { status: 'restarting' };
+  // 本进程内已有下载包 → 直接装
+  if (updaterHasDownload) {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+    return { status: 'restarting' };
+  }
+  // 用户重启过软件、或当初点了「稍后重启」：autoUpdater 内部状态已丢失。
+  // 重新 check + download（命中本地缓存，秒完成），下载完在事件里自动 quitAndInstall
+  if (app.isPackaged && pendingInstall) {
+    installAfterDownload = true;
+    autoUpdater.checkForUpdates().catch(() => { installAfterDownload = false; });
+    return { status: 'preparing' };
+  }
+  return { status: 'no-update' };
+});
+
+/* 渲染端查询当前版本 / 是否有待安装更新（用于侧栏与设置页常驻入口） */
+ipcMain.handle('get-update-state', () => ({
+  version: app.getVersion(),
+  pendingInstall: pendingInstall ? { version: pendingInstall.version, notes: pendingInstall.notes || '' } : null,
+  updateAvailable
+}));
+
+/* 渲染端上报今日专注分钟与计时状态，供托盘菜单展示 */
+ipcMain.handle('set-tray-state', (e, s) => {
+  trayState = {
+    todayMin: Math.max(0, Math.round(Number(s && s.todayMin) || 0)),
+    running: !!(s && s.running)
+  };
+  updateTrayMenu();
+  return { status: 'ok' };
 });
 
 /* 渲染端启动时补拉可能错过的更新事件 */

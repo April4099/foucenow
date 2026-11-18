@@ -1957,6 +1957,7 @@
     icon.innerHTML = app.timer.running
       ? '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>'
       : '<polygon points="6 3 20 12 6 21 6 3"/>';
+    syncTrayState();
   }
 
   function setTimerMode(mode) {
@@ -2041,6 +2042,7 @@
     else if (v === 'schedule') renderSchedule();
     else if (v === 'calendar') renderCalendar();
     else if (v === 'focus') renderFocus();
+    syncTrayState();
   }
 
   /* ==========================================
@@ -3310,6 +3312,56 @@
     }
   }
 
+  /* ---------- 更新状态：侧栏 / 设置 / 托盘三处常驻入口共用 ---------- */
+  let updatePending = null;        // { version, notes } 已下载待安装
+  let updateFound = false;         // 发现有新版本
+  let currentAppVersion = '';
+  let openUpdateModalForPending = null; // 由 initUpdateUI 注入（renderModal 在其闭包内）
+
+  function refreshUpdateIndicators() {
+    const badge = $('#sidebar-version');
+    const txt = $('#sidebar-version-text');
+    if (txt) txt.textContent = 'v' + (currentAppVersion || '—');
+    if (badge) {
+      badge.classList.toggle('has-update', updateFound && !updatePending);
+      badge.classList.toggle('pending', !!updatePending);
+      badge.title = updatePending
+        ? 'v' + updatePending.version + ' 已下载，点此安装'
+        : (updateFound ? '发现新版本，点此查看' : '当前版本 · 点击检查更新');
+    }
+    const btn = $('#btn-install-pending');
+    if (btn) {
+      btn.style.display = updatePending ? '' : 'none';
+      if (updatePending) btn.textContent = '⬆ 安装 v' + updatePending.version + '（重启生效）';
+    }
+  }
+
+  /* ---------- 托盘：上报今日专注与计时状态、接收菜单命令 ---------- */
+  function syncTrayState() {
+    if (!window.electronAPI || !window.electronAPI.setTrayState) return;
+    const today = todayStr();
+    const todayMin = (app.data.sessions || [])
+      .filter(s => s.date === today)
+      .reduce((a, s) => a + (s.durationMin || 0), 0);
+    window.electronAPI.setTrayState({ todayMin, running: !!app.timer.running }).catch(() => {});
+  }
+
+  function initTrayBridge() {
+    const api = window.electronAPI;
+    syncTrayState();
+    if (!api) return;
+    if (api.onTrayCommand) {
+      api.onTrayCommand(type => {
+        if (type === 'toggle-timer') {
+          toggleTimer();
+          syncTrayState();
+        } else if (type === 'install-update') {
+          if (openUpdateModalForPending) openUpdateModalForPending();
+        }
+      });
+    }
+  }
+
   /* ==========================================
      应用内更新弹窗（替代系统原生对话框）
      ========================================== */
@@ -3375,6 +3427,15 @@
       openModal('modal-update');
     }
 
+    // 供托盘 / 侧栏 / 设置页复用：把「已下载待安装」的弹窗重新唤出来
+    openUpdateModalForPending = () => {
+      if (!updatePending) {
+        if (window.electronAPI && window.electronAPI.checkUpdate) window.electronAPI.checkUpdate();
+        return;
+      }
+      renderModal({ mode: 'downloaded', version: updatePending.version, notes: updatePending.notes });
+    };
+
     // 主按钮：根据当前动作执行
     btnMain.addEventListener('click', () => {
       const action = btnMain.dataset.action;
@@ -3385,18 +3446,29 @@
         }
       } else if (action === 'restart') {
         if (window.electronAPI && window.electronAPI.restartToUpdate) {
-          window.electronAPI.restartToUpdate();
+          window.electronAPI.restartToUpdate().then(r => {
+            // 进程重启过、内部下载状态丢失时，主进程会先重新准备再自动安装
+            if (r && r.status === 'preparing') showToast('正在准备更新，稍后会自动重启…', 'info');
+            else if (r && r.status === 'no-update') showToast('没有待安装的更新，请重新检查更新', 'warning');
+          }).catch(() => {});
         }
       } else if (action === 'close') {
         closeModal('modal-update');
       }
     });
-    btnLater.addEventListener('click', () => closeModal('modal-update'));
+    btnLater.addEventListener('click', () => {
+      if (btnMain.dataset.action === 'restart') {
+        showToast('更新已就绪，可从侧栏版本号或托盘随时安装', 'info');
+      }
+      closeModal('modal-update');
+    });
 
     // 统一分发来自主进程的更新事件
     function handleUpdateEvent(type, d) {
       if (type === 'update-available') {
         updateCtx.version = d.version;
+        updateFound = true;
+        refreshUpdateIndicators();
         renderModal({ mode: 'available', version: d.version, currentVersion: d.currentVersion, notes: d.notes });
       } else if (type === 'update-progress') {
         if (progWrap.style.display !== 'none') {
@@ -3407,9 +3479,15 @@
         }
       } else if (type === 'update-downloaded') {
         updateCtx.version = d.version;
+        updatePending = { version: d.version, notes: d.notes || '' };
+        updateFound = false;
+        refreshUpdateIndicators();
         renderModal({ mode: 'downloaded', version: d.version, notes: d.notes });
       } else if (type === 'update-done') {
         updateCtx.version = d.version;
+        updatePending = null;
+        updateFound = false;
+        refreshUpdateIndicators();
         renderModal({ mode: 'done', version: d.version, notes: d.notes });
       }
     }
@@ -3420,17 +3498,33 @@
       if (api.onUpdateProgress) api.onUpdateProgress(d => handleUpdateEvent('update-progress', d));
       if (api.onUpdateDownloaded) api.onUpdateDownloaded(d => handleUpdateEvent('update-downloaded', d));
       if (api.onUpdateDone) api.onUpdateDone(d => handleUpdateEvent('update-done', d));
-      if (api.onUpdateNotAvailable) api.onUpdateNotAvailable(() => showToast('已是最新版本 ✓', 'success'));
+      if (api.onUpdateNotAvailable) api.onUpdateNotAvailable(() => {
+        updateFound = false;
+        updatePending = null;
+        refreshUpdateIndicators();
+        showToast('已是最新版本 ✓', 'success');
+      });
       // 补拉可能错过的事件（主进程已检查但渲染端尚未就绪）
       if (api.pullUpdateEvent) {
         api.pullUpdateEvent().then(ev => {
           if (ev && ev.type) handleUpdateEvent(ev.type, ev.payload);
         }).catch(() => {});
       }
+      // 启动时主动读取「当前版本 + 是否有上次下载完没装的更新」
+      if (api.getUpdateState) {
+        api.getUpdateState().then(st => {
+          if (!st) return;
+          currentAppVersion = st.version || '';
+          if (st.pendingInstall) updatePending = st.pendingInstall;
+          else if (st.updateAvailable) updateFound = true;
+          refreshUpdateIndicators();
+        }).catch(() => {});
+      }
       // 设置页「检查更新」按钮
       const btnCheck = $('#btn-check-update');
       if (btnCheck && api.checkUpdate) {
         btnCheck.addEventListener('click', () => {
+          if (updatePending) { openUpdateModalForPending(); return; }
           if (btnCheck.disabled) return;
           btnCheck.disabled = true;
           const orig = btnCheck.textContent;
@@ -3440,6 +3534,15 @@
           });
         });
       }
+      // 侧栏常驻版本号：点击即可回到安装入口
+      const badge = $('#sidebar-version');
+      if (badge) badge.addEventListener('click', () => {
+        if (updatePending) openUpdateModalForPending();
+        else if (api.checkUpdate) api.checkUpdate();
+      });
+      // 设置页「待安装更新」按钮
+      const btnInstall = $('#btn-install-pending');
+      if (btnInstall) btnInstall.addEventListener('click', () => openUpdateModalForPending());
     }
   }
 
@@ -3466,6 +3569,7 @@
     bindSettingsEvents();
     bindWindowControls();
     initUpdateUI();
+    initTrayBridge();
     initFocusQuality();
     initReplan();
     initShield();
@@ -3483,12 +3587,16 @@
       setTimeout(() => showToast('🧹 有 ' + pendingReplan.length + ' 项遗留任务，可在「日程安排」点「智能整理」', 'info'), 1500);
     }
 
-    // 显示版本号（桌面端取真实版本）
+    // 显示版本号（桌面端取真实版本；侧栏常驻，随时能看出自己跑的是哪一版）
     if (window.electronAPI && window.electronAPI.getVersion) {
       window.electronAPI.getVersion().then(v => {
         const el = $('#app-version');
         if (el && v) el.textContent = 'v' + v;
+        if (v) { currentAppVersion = v; refreshUpdateIndicators(); }
       }).catch(() => {});
+    } else {
+      currentAppVersion = '预览版';
+      refreshUpdateIndicators();
     }
 
     setInterval(() => {
