@@ -275,8 +275,21 @@ function createTray() {
 /* ========== 独立悬浮专注钟（可离开主窗口，默认置顶） ========== */
 let floatWindow = null;
 
+// 置顶级别：默认 floating 会被其他置顶/全屏应用盖住，改用screen-saver（最高级）
+// Windows 下窗口获得焦点或系统刷新后偶发降级，需要在 show/focus 时重新断言
+function pinOnTop(win) {
+  if (!win || win.isDestroyed()) return;
+  try {
+    win.setAlwaysOnTop(true, 'screen-saver');
+    if (win.setVisibleOnAllWorkspaces) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } catch (e) { /* 某些平台不支持全部工作区，忽略 */ }
+}
+
 function createFloatWindow() {
-  if (floatWindow) { floatWindow.show(); floatWindow.focus(); return; }
+  if (floatWindow) {
+    floatWindow.show(); floatWindow.focus(); pinOnTop(floatWindow);
+    return;
+  }
   floatWindow = new BrowserWindow({
     width: 240, height: 300,
     minWidth: 200, minHeight: 260,
@@ -290,9 +303,18 @@ function createFloatWindow() {
       preload: path.join(__dirname, 'preload.js')
     }
   });
+  pinOnTop(floatWindow);
   floatWindow.loadFile('float.html');
-  floatWindow.once('ready-to-show', () => floatWindow.show());
+  floatWindow.once('ready-to-show', () => { floatWindow.show(); pinOnTop(floatWindow); });
+  // 焦点切换、从后台恢复后重新置顶，防止被其他应用挤下去
+  floatWindow.on('focus', () => pinOnTop(floatWindow));
+  // 定期兜底：每 10 秒确认一次仍是最顶级
+  const keepTop = setInterval(() => {
+    if (!floatWindow || floatWindow.isDestroyed()) { clearInterval(keepTop); return; }
+    if (!floatWindow.isAlwaysOnTop()) pinOnTop(floatWindow);
+  }, 10000);
   floatWindow.on('closed', () => {
+    clearInterval(keepTop);
     floatWindow = null;
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('float-window-state', false);
   });
@@ -317,7 +339,7 @@ ipcMain.on('float-request-state', (e) => { if (mainWindow && !mainWindow.isDestr
 let shieldWindow = null;
 
 function createShieldWindow() {
-  if (shieldWindow) { shieldWindow.show(); shieldWindow.focus(); return; }
+  if (shieldWindow) { shieldWindow.show(); shieldWindow.focus(); pinOnTop(shieldWindow); return; }
   const { screen } = require('electron');
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   shieldWindow = new BrowserWindow({
@@ -332,9 +354,10 @@ function createShieldWindow() {
       preload: path.join(__dirname, 'preload.js')
     }
   });
-  shieldWindow.setAlwaysOnTop(true, 'screen-saver');
+  pinOnTop(shieldWindow);
   shieldWindow.loadFile('shield.html');
-  shieldWindow.once('ready-to-show', () => shieldWindow.show());
+  shieldWindow.once('ready-to-show', () => { shieldWindow.show(); pinOnTop(shieldWindow); });
+  shieldWindow.on('focus', () => pinOnTop(shieldWindow));
   shieldWindow.on('closed', () => {
     shieldWindow = null;
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('shield-window-state', false);

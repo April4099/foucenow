@@ -58,21 +58,21 @@
   --bg-hover: #ECEAF4;
   --bg-sidebar: #F8F8FC;
   --bg-elevated: #FFFFFF;
-  --primary: #2F6FAE;
-  --primary-light: #6FA5D8;
-  --primary-dark: #24588C;
+  --primary: #0B63C8;
+  --primary-light: #3D86E8;
+  --primary-dark: #084E9E;
   --on-primary: #FFFFFF;
-  --on-primary-soft: rgba(255, 255, 255, 0.38);
-  --primary-glow: rgba(47, 111, 174, 0.22);
-  --primary-pale: rgba(111, 165, 216, 0.16);
-  --accent: #A65385;
-  --accent-pale: rgba(166, 83, 133, 0.12);
-  --success: #2F8F63;
-  --success-pale: rgba(47, 143, 99, 0.13);
-  --warning: #9E6000;
-  --warning-pale: rgba(158, 96, 0, 0.14);
-  --danger: #C9455E;
-  --danger-pale: rgba(201, 69, 94, 0.12);
+  --on-primary-soft: rgba(255, 255, 255, 0.4);
+  --primary-glow: rgba(11, 99, 200, 0.26);
+  --primary-pale: rgba(61, 134, 232, 0.16);
+  --accent: #D6247C;
+  --accent-pale: rgba(214, 36, 124, 0.12);
+  --success: #00875A;
+  --success-pale: rgba(0, 135, 90, 0.13);
+  --warning: #B25E00;
+  --warning-pale: rgba(178, 94, 0, 0.14);
+  --danger: #E11D48;
+  --danger-pale: rgba(225, 29, 72, 0.12);
   --text: #2C2C3C;
   --text-secondary: #5B5B70;
   --text-muted: #77758A;
@@ -152,21 +152,21 @@
   --bg-hover: #EBEADF;
   --bg-sidebar: #F8F7F0;
   --bg-elevated: #FFFFFF;
-  --primary: #4E7A52;
-  --primary-light: #86AC88;
-  --primary-dark: #3C6040;
+  --primary: #227A3E;
+  --primary-light: #4CA168;
+  --primary-dark: #175C2E;
   --on-primary: #FFFFFF;
-  --on-primary-soft: rgba(255, 255, 255, 0.38);
-  --primary-glow: rgba(78, 122, 82, 0.22);
-  --primary-pale: rgba(134, 172, 136, 0.16);
-  --accent: #9A7550;
-  --accent-pale: rgba(154, 117, 80, 0.12);
-  --success: #3B7D45;
-  --success-pale: rgba(59, 125, 69, 0.13);
-  --warning: #8A5E12;
-  --warning-pale: rgba(138, 94, 18, 0.16);
-  --danger: #B45A45;
-  --danger-pale: rgba(180, 90, 69, 0.12);
+  --on-primary-soft: rgba(255, 255, 255, 0.4);
+  --primary-glow: rgba(34, 122, 62, 0.26);
+  --primary-pale: rgba(76, 161, 104, 0.16);
+  --accent: #C2702A;
+  --accent-pale: rgba(194, 112, 42, 0.12);
+  --success: #0B7A4B;
+  --success-pale: rgba(11, 122, 75, 0.13);
+  --warning: #9A6810;
+  --warning-pale: rgba(154, 104, 16, 0.16);
+  --danger: #D0432C;
+  --danger-pale: rgba(208, 67, 44, 0.12);
   --text: #2E2E26;
   --text-secondary: #5C5C4E;
   --text-muted: #767663;
@@ -199,21 +199,21 @@
   --bg-hover: #FCE8ED;
   --bg-sidebar: #FFF6F6;
   --bg-elevated: #FFFFFF;
-  --primary: #B75575;
-  --primary-light: #DB8AA4;
-  --primary-dark: #94405D;
+  --primary: #D81B60;
+  --primary-light: #EC5A8C;
+  --primary-dark: #B0154D;
   --on-primary: #FFFFFF;
-  --on-primary-soft: rgba(255, 255, 255, 0.38);
-  --primary-glow: rgba(183, 85, 117, 0.22);
-  --primary-pale: rgba(219, 138, 164, 0.16);
-  --accent: #8B5AA8;
-  --accent-pale: rgba(139, 90, 168, 0.12);
-  --success: #3F8A63;
-  --success-pale: rgba(63, 138, 99, 0.13);
+  --on-primary-soft: rgba(255, 255, 255, 0.4);
+  --primary-glow: rgba(216, 27, 96, 0.26);
+  --primary-pale: rgba(236, 90, 140, 0.16);
+  --accent: #8E24AA;
+  --accent-pale: rgba(142, 36, 170, 0.12);
+  --success: #00875A;
+  --success-pale: rgba(0, 135, 90, 0.13);
   --warning: #A3680E;
   --warning-pale: rgba(163, 104, 14, 0.16);
-  --danger: #C45672;
-  --danger-pale: rgba(196, 86, 114, 0.12);
+  --danger: #E53935;
+  --danger-pale: rgba(229, 57, 53, 0.12);
   --text: #3C2E34;
   --text-secondary: #6B555D;
   --text-muted: #8A707A;
@@ -292,21 +292,21 @@
   --bg-hover: #E7E2D3;
   --bg-sidebar: #FBF8F0;
   --bg-elevated: #FFFDF7;
-  --primary: #2F5D8C;
-  --primary-light: #6A92BA;
-  --primary-dark: #22466D;
+  --primary: #1157A6;
+  --primary-light: #4A83CE;
+  --primary-dark: #0C4282;
   --on-primary: #FFFFFF;
-  --on-primary-soft: rgba(255, 255, 255, 0.4);
-  --primary-glow: rgba(47, 93, 140, 0.2);
-  --primary-pale: rgba(106, 146, 186, 0.15);
-  --accent: #8A6A43;
-  --accent-pale: rgba(138, 106, 67, 0.12);
-  --success: #357A5B;
-  --success-pale: rgba(53, 122, 91, 0.12);
-  --warning: #8A5E12;
-  --warning-pale: rgba(138, 94, 18, 0.14);
-  --danger: #B34A4A;
-  --danger-pale: rgba(179, 74, 74, 0.12);
+  --on-primary-soft: rgba(255, 255, 255, 0.42);
+  --primary-glow: rgba(17, 87, 166, 0.24);
+  --primary-pale: rgba(74, 131, 206, 0.15);
+  --accent: #B26A22;
+  --accent-pale: rgba(178, 106, 34, 0.12);
+  --success: #00795A;
+  --success-pale: rgba(0, 121, 90, 0.12);
+  --warning: #9A6810;
+  --warning-pale: rgba(154, 104, 16, 0.14);
+  --danger: #D0343C;
+  --danger-pale: rgba(208, 52, 60, 0.12);
   --text: #24221E;
   --text-secondary: #55524B;
   --text-muted: #726E64;
@@ -2744,13 +2744,33 @@ button:not(:disabled), .distraction-chip, .mode-chip, .phase-chip,
               opacity var(--dur-base) var(--ease-smooth);
 }
 
-/* 卡片层次：轻微抬升，一眼能看出「可交互」 */
+/* 卡片层次：所有卡片统一轻微抬升，一眼能看出「可交互」 */
+.card, .growth-card, .focus-goal-card, .fstat-card,
+.ach-wall, .motivation-card, .todo-item, .ach-item,
+.greeting-card, .calendar-card, .notice-card, .section-block,
+.insight30, .week-narrative, .cal-day-detail, .cal-month-stats,
+.month-stat-card, .peak-banner, .focus-summary,
+.next-reminder, .daily-checkin, .focus-task-card, .intention-card,
+.review-card, .recipe-card, .phase-detail {
+  transition: transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-smooth),
+              background var(--dur-base) var(--ease-smooth);
+}
 .card:hover, .growth-card:hover, .focus-goal-card:hover, .fstat-card:hover,
-.ach-wall:hover, .motivation-card:hover, .todo-item:hover, .ach-item:hover {
+.ach-wall:hover, .motivation-card:hover, .todo-item:hover, .ach-item:hover,
+.greeting-card:hover, .calendar-card:hover, .notice-card:hover,
+.insight30:hover, .week-narrative:hover, .cal-day-detail:hover,
+.cal-month-stats:hover, .month-stat-card:hover,
+.peak-banner:hover, .focus-summary:hover, .next-reminder:hover,
+.daily-checkin:hover, .focus-task-card:hover, .intention-card:hover,
+.review-card:hover, .recipe-card:hover, .phase-detail:hover {
   transform: translateY(-2px);
   border-color: var(--border-light);
   box-shadow: var(--lift-shadow);
 }
+/* 嵌套卡片：避免父卡抬起时子卡也抬造成错位，只给边框微亮 */
+.focus-stats-grid, .month-stats-grid, .day-stats-row, .greeting-stats { transition: none; }
 .btn-primary:hover, .btn-secondary:hover, .btn-danger:hover { transform: translateY(-1px); }
 
 /* 按压反馈：所有可点元素统一有「按下去」的手感 */
@@ -2935,3 +2955,62 @@ body, .sidebar, .app-header {
   display: block; width: 100%; margin-top: 10px;
   border-radius: 10px; font-weight: 600;
 }
+
+/* ========== v1.17 交互质感：弹窗与深层界面 ========== */
+/* 弹窗内容分层入场，不再是整块硬弹出 */
+.modal-overlay.show .modal > * {
+  animation: modalRise 0.42s var(--ease-out, ease-out) both;
+}
+.modal-overlay.show .modal > *:nth-child(2) { animation-delay: 0.04s; }
+.modal-overlay.show .modal > *:nth-child(3) { animation-delay: 0.08s; }
+.modal-overlay.show .modal > *:nth-child(4) { animation-delay: 0.12s; }
+.modal-overlay.show .modal > *:nth-child(n+5) { animation-delay: 0.16s; }
+@keyframes modalRise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 弹窗内选项/列表：交错浮现，层级分明 */
+.modal .setting-row, .modal .ach-item, .modal .onboard-body p,
+.modal .update-note-line, .modal .modal-actions > * {
+  transition: transform var(--dur-fast, 0.18s) var(--ease-out, ease-out),
+              background var(--dur-fast, 0.18s) ease,
+              border-color var(--dur-fast, 0.18s) ease;
+}
+.modal .setting-row:hover, .modal .ach-item:hover {
+  background: var(--bg-hover);
+  border-radius: 10px;
+  transform: translateX(3px);
+}
+.modal .modal-actions > button:hover { transform: translateY(-2px); }
+
+/* 弹窗遮罩点击区提示：靠近边缘时轻微收缩，暗示可关闭 */
+.modal-overlay.show:hover .modal { border-color: var(--border-light); }
+
+/* 二级/三级面板：设置分区头部、详情区块的进入感 */
+.settings-section .settings-list > .setting-row,
+.cal-day-detail .day-section,
+.week-narrative .week-insights > * {
+  animation: softReveal 0.35s var(--ease-out, ease-out) both;
+}
+@keyframes softReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 深层可点元素的悬停高亮：让「能点」一眼可见 */
+.cal-day-detail .day-section:hover,
+.settings-section .setting-row:hover,
+.peak-banner:hover .pb-text { color: var(--text); }
+
+/* 更新弹窗进度条：流动高光，下载时不再像静止 */
+.update-progress-fill {
+  position: relative; overflow: hidden;
+}
+.update-progress-fill::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: translateX(-100%);
+  animation: progressShine 1.6s linear infinite;
+}
+@keyframes progressShine { to { transform: translateX(100%); } }

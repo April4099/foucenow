@@ -2662,28 +2662,28 @@
       swatches: ['#FF2E7E', '#282834', '#FF8FAB', '#0A0A0E', '#3DDC91']
     },
     candy: {
-      name: 'Candy Pop', desc: '糖果汽水 · 高对比',
-      swatches: ['#2F6FAE', '#6FA5D8', '#A65385', '#2F8F63', '#C9455E']
+      name: 'Candy Pop', desc: '糖果汽水',
+      swatches: ['#0B63C8', '#3D86E8', '#D6247C', '#00875A', '#E11D48']
     },
     midnight: {
       name: 'Midnight', desc: '夜间数字世界',
       swatches: ['#E58BB9', '#303C68', '#F1CF76', '#72C9C0', '#9890ED']
     },
     matcha: {
-      name: 'Matcha', desc: '抹茶甜品 · 高对比',
-      swatches: ['#4E7A52', '#86AC88', '#9A7550', '#3B7D45', '#B45A45']
+      name: 'Matcha', desc: '抹茶甜品',
+      swatches: ['#227A3E', '#4CA168', '#C2702A', '#0B7A4B', '#D0432C']
     },
     strawberry: {
-      name: 'Strawberry', desc: '草莓奶油 · 高对比',
-      swatches: ['#B75575', '#DB8AA4', '#8B5AA8', '#3F8A63', '#C45672']
+      name: 'Strawberry', desc: '草莓奶油',
+      swatches: ['#D81B60', '#EC5A8C', '#8E24AA', '#00875A', '#E53935']
     },
     ocean: {
       name: 'Ocean', desc: '深海蓝',
       swatches: ['#4FC3D9', '#7FE3C4', '#142A38', '#F2C56B', '#5FD9A8']
     },
     paper: {
-      name: 'Paper', desc: '纸墨 · 浅色高对比',
-      swatches: ['#2F5D8C', '#8A6A43', '#357A5B', '#B34A4A', '#F5F2EA']
+      name: 'Paper', desc: '纸墨 · 浅色',
+      swatches: ['#1157A6', '#4A83CE', '#B26A22', '#00795A', '#D0343C']
     },
     aurora: {
       name: 'Aurora', desc: '极光夜色',
