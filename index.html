@@ -406,6 +406,20 @@
             <div class="week-insights" id="week-insights"></div>
           </div>
 
+          <!-- 近 30 天趋势与分心来源 -->
+          <div class="insight30" id="insight30">
+            <div class="wn-head">
+              <span class="wn-title">📈 近 30 天</span>
+              <span class="wn-sub" id="insight30-sub">专注趋势与分心来源</span>
+            </div>
+            <div class="trend-chart" id="trend-chart"></div>
+            <div class="dist-top" id="dist-top"></div>
+            <div class="insight-actions">
+              <button class="btn-secondary btn-sm" id="btn-export-week-png" type="button">导出周报图片</button>
+              <button class="btn-secondary btn-sm" id="btn-export-week-csv" type="button">导出周报 CSV</button>
+            </div>
+          </div>
+
           <!-- 选中日详情 -->
           <div class="cal-day-detail" id="cal-day-detail">
             <h3 id="cal-day-title">选择日期查看详情</h3>
@@ -524,6 +538,16 @@
                 </div>
                 <label class="toggle-switch">
                   <input type="checkbox" id="setting-peak-remind">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">⌨ 全局快捷键</span>
+                  <span class="setting-desc">Ctrl+Alt+S 开始/暂停 · Ctrl+Alt+H 老板键隐藏 · Ctrl+Alt+E 收起浮层</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-shortcuts" checked>
                   <span class="toggle-slider"></span>
                 </label>
               </div>
@@ -666,6 +690,16 @@
                   <span class="setting-desc">从备份文件恢复数据（将覆盖当前数据）</span>
                 </div>
                 <button class="btn-secondary" id="btn-import-data">导入</button>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-label">🧮 重算历史专注分</span>
+                  <span class="setting-desc">用当前「分心时长占比」口径重算老记录的质量分，不改原始记录；执行前自动备份，可撤销</span>
+                </div>
+                <div class="setting-input-group">
+                  <button class="btn-secondary btn-sm" id="btn-recalc-scores" type="button">重算</button>
+                  <button class="btn-secondary btn-sm" id="btn-undo-recalc" type="button" style="display:none">撤销</button>
+                </div>
               </div>
               <div class="setting-row">
                 <div class="setting-info">

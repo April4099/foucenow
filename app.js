@@ -81,6 +81,19 @@
     return d.innerHTML;
   }
 
+  const APP_LABELS = {
+    wechat: '微信', qq: 'QQ', chrome: 'Chrome', msedge: 'Edge', firefox: 'Firefox',
+    steam: 'Steam', douyin: '抖音', bilibili: 'B站', neteasecloudmusic: '网易云音乐',
+    spotify: 'Spotify', slack: 'Slack', discord: 'Discord', zoom: 'Zoom',
+    unknown: '未识别'
+  };
+  function normalizeAppKey(name) {
+    let k = String(name || 'unknown').toLowerCase().replace(/\.exe$/, '').trim() || 'unknown';
+    Object.keys(APP_LABELS).some(p => { if (k.indexOf(p) !== -1) { k = p; return true; } return false; });
+    return k;
+  }
+  function appLabel(key) { return APP_LABELS[key] || String(key); }
+
   const CATS = ['设计', '绘制', '工作', '学习', '生活', '健康', '其他'];
   function catBadge(cat) {
     const c = CATS.includes(cat) ? cat : '其他';
@@ -124,7 +137,8 @@
         dailyFocusGoal: 120,
         soundEnabled: true,
         notifEnabled: true,
-        peakRemindEnabled: true
+        peakRemindEnabled: true,
+        shortcutsEnabled: true
       }
     };
   }
@@ -154,6 +168,7 @@
       customMinutes: 25,
       distractions: 0,
       distractionSec: 0,
+      distractionByApp: {},
       pauses: 0
     },
     shieldActive: false
@@ -1286,6 +1301,7 @@
 
     // 本周回顾（叙事化）
     renderWeekNarrative();
+    renderInsight30();
     renderAchievements();
   }
 
@@ -1534,6 +1550,207 @@
     }
   }
 
+  /* ==========================================
+     近 30 天趋势 + 分心来源排行 + 周报导出
+     ========================================== */
+  function get30InsightData() {
+    const end = todayStr();
+    const days = Array.from({ length: 30 }, (_, i) => addDays(end, i - 29));
+    const inRange = new Set(days);
+    const byDay = {};
+    days.forEach(d => { byDay[d] = { min: 0, sec: 0, n: 0 }; });
+    const dist = {};
+    (app.data.sessions || []).forEach(s => {
+      if (!inRange.has(s.date)) return;
+      byDay[s.date].min += s.durationMin || 0;
+      byDay[s.date].sec += typeof s.distractionSec === 'number' ? s.distractionSec : (s.distractions || 0) * 20;
+      byDay[s.date].n += 1;
+      const detail = s.distractionByApp || {};
+      Object.keys(detail).forEach(k => { dist[k] = (dist[k] || 0) + (detail[k] || 0); });
+    });
+    return { days, byDay, dist };
+  }
+
+  function renderInsight30() {
+    const wrap = $('#insight30');
+    if (!wrap) return;
+    const { days, byDay, dist } = get30InsightData();
+    const vals = days.map(d => byDay[d].min);
+    const max = Math.max(60, ...vals);
+    const total = vals.reduce((a, b) => a + b, 0);
+    const active = vals.filter(v => v > 0).length;
+    const sub = $('#insight30-sub');
+    if (sub) sub.textContent = `累计 ${total} 分钟 · 有专注 ${active} 天`;
+
+    const chart = $('#trend-chart');
+    if (chart) {
+      const W = 600, H = 118, base = 94, top = 10, step = (W - 20) / 30;
+      let bars = '';
+      days.forEach((d, i) => {
+        const v = vals[i];
+        const h = v > 0 ? Math.max(3, Math.round((v / max) * (base - top))) : 0;
+        const x = 10 + i * step + 1;
+        bars += `<rect x="${x.toFixed(1)}" y="${base - h}" width="${Math.max(6, step - 3).toFixed(1)}" height="${h}" rx="3" fill="var(--primary)" opacity="${v ? 0.85 : 0.12}"><title>${d} · ${v} 分钟</title></rect>`;
+      });
+      chart.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="118" role="img" aria-label="近 30 天专注趋势"><line x1="10" y1="${base}" x2="590" y2="${base}" stroke="var(--border)" stroke-width="1"/>${bars}<text x="10" y="112" font-size="11" fill="var(--text-secondary)">30 天前</text><text x="590" y="112" text-anchor="end" font-size="11" fill="var(--text-secondary)">今天</text></svg>`;
+    }
+
+    const top = $('#dist-top');
+    if (top) {
+      const entries = Object.keys(dist).map(k => ({ k, sec: dist[k] }));
+      const allSec = entries.reduce((a, b) => a + b.sec, 0);
+      const arr = entries.sort((a, b) => b.sec - a.sec).slice(0, 5);
+      if (!arr.length) {
+        top.innerHTML = '<div class="dist-empty">从这一版开始，切走时被记下的软件会出现在这里。完成一次专注就能看到排行。</div>';
+      } else {
+        top.innerHTML = '<div class="dist-title">最常切走的软件</div>' + arr.map(x => {
+          const pct = allSec ? Math.round(x.sec / allSec * 100) : 0;
+          const mins = Math.max(1, Math.round(x.sec / 60));
+          return `<div class="dist-row"><span class="dist-name">${escapeHtml(appLabel(x.k))}</span><span class="dist-bar"><i style="width:${pct}%"></i></span><span class="dist-val">${mins} 分钟</span></div>`;
+        }).join('');
+      }
+    }
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function getWeekSessions() {
+    const end = todayStr();
+    const start = addDays(end, -6);
+    return (app.data.sessions || []).filter(s => s.date >= start && s.date <= end)
+      .sort((a, b) => (a.date + (a.startTime || '')).localeCompare(b.date + (b.startTime || '')));
+  }
+
+  function exportWeekCSV() {
+    const rows = getWeekSessions();
+    if (!rows.length) { showToast('最近 7 天还没有专注记录', 'warning'); return; }
+    const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+    const head = ['日期', '开始时间', '时长(分钟)', '分类', '关联任务', '质量分', '分心秒数', '分心来源'];
+    const lines = rows.map(s => {
+      const todo = s.todoId ? (app.data.todos || []).find(t => t.id === s.todoId) : null;
+      const detail = s.distractionByApp || {};
+      const apps = Object.keys(detail).map(k => appLabel(k) + ' ' + Math.round(detail[k] / 60) + '分').join('；');
+      return [s.date, (s.startTime || '').slice(11, 16) || '', s.durationMin || 0,
+        s.category || '其他', todo ? todo.text : '', s.focusScore == null ? '' : s.focusScore,
+        s.distractionSec || 0, apps].map(esc).join(',');
+    });
+    const csv = '\ufeff' + [head.map(esc).join(','), ...lines].join('\r\n');
+    downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'FocusNow-周报-' + todayStr() + '.csv');
+    showToast('周报 CSV 已导出 ✓', 'success');
+  }
+
+  function exportWeekPNG() {
+    const data = buildWeekNarrative();
+    if (!data) { showToast('最近 7 天还没有可用数据', 'warning'); return; }
+    const W = 900, H = 520, pad = 56;
+    const canvas = document.createElement('canvas');
+    canvas.width = W * 2; canvas.height = H * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+    const styles = getComputedStyle(document.body);
+    const primary = styles.getPropertyValue('--primary').trim() || '#FF2E7E';
+    const text = styles.getPropertyValue('--text').trim() || '#F5F5FA';
+    const secondary = styles.getPropertyValue('--text-secondary').trim() || '#C0C0D0';
+    const card = styles.getPropertyValue('--bg-card').trim() || '#282834';
+    ctx.fillStyle = card; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = primary; ctx.fillRect(0, 0, W, 6);
+    ctx.fillStyle = primary; ctx.font = '600 28px sans-serif';
+    ctx.fillText('此刻 FocusNow · 本周回顾', pad, 66);
+    ctx.fillStyle = secondary; ctx.font = '16px sans-serif';
+    ctx.fillText(addDays(todayStr(), -6) + ' — ' + todayStr(), pad, 94);
+    const wrapText = (str, maxWidth) => {
+      let line = '', out = [];
+      for (const ch of String(str)) {
+        if (ctx.measureText(line + ch).width > maxWidth && line) { out.push(line); line = ch; }
+        else line += ch;
+      }
+      if (line) out.push(line);
+      return out;
+    };
+    ctx.fillStyle = text; ctx.font = '20px sans-serif';
+    let y = 142;
+    wrapText(data.text, W - pad * 2).forEach(line => { ctx.fillText(line, pad, y); y += 34; });
+    y += 10;
+    (data.chips || []).forEach(c => {
+      const label = c.label + ' ' + c.value;
+      const w = Math.min(W - pad * 2, ctx.measureText(label).width + 28);
+      ctx.fillStyle = primary; ctx.globalAlpha = 0.16;
+      ctx.fillRect(pad, y - 22, w, 34); ctx.globalAlpha = 1;
+      ctx.fillStyle = text; ctx.font = '16px sans-serif';
+      ctx.fillText(label, pad + 14, y);
+      y += 46;
+    });
+    ctx.fillStyle = secondary; ctx.font = '14px sans-serif';
+    ctx.fillText('数据仅保存在你的本机 · focusnow', pad, H - 28);
+    canvas.toBlob(blob => {
+      if (!blob) { showToast('图片生成失败', 'warning'); return; }
+      downloadBlob(blob, 'FocusNow-周报-' + todayStr() + '.png');
+      showToast('周报图片已导出 ✓', 'success');
+    }, 'image/png');
+  }
+
+  function initInsightExports() {
+    const png = $('#btn-export-week-png');
+    if (png) png.addEventListener('click', exportWeekPNG);
+    const csv = $('#btn-export-week-csv');
+    if (csv) csv.addEventListener('click', exportWeekCSV);
+  }
+
+  /* 历史分数重算：先快照再改派生分，支持一键撤销 */
+  const SCORE_SNAPSHOT_KEY = 'focusnow_score_recalc_snapshot_v114';
+  function initScoreRecalcUI() {
+    const btn = $('#btn-recalc-scores');
+    const undo = $('#btn-undo-recalc');
+    const syncButtons = () => {
+      const done = !!(app.data.settings && app.data.settings.scoreRecalcV114);
+      if (btn) { btn.textContent = done ? '已重算' : '重算'; btn.disabled = done; }
+      if (undo) undo.style.display = done ? '' : 'none';
+    };
+    syncButtons();
+
+    if (btn) btn.addEventListener('click', () => {
+      const sessions = app.data.sessions || [];
+      if (!sessions.length) { showToast('还没有专注记录', 'warning'); return; }
+      const snapshot = JSON.stringify(app.data);
+      try { localStorage.setItem(SCORE_SNAPSHOT_KEY, snapshot); } catch (e) { /* 容量不足时仍有主进程备份 */ }
+      if (window.electronAPI && window.electronAPI.backupSave) {
+        window.electronAPI.backupSave(snapshot).catch(() => {});
+      }
+      let changed = 0;
+      sessions.forEach(s => {
+        if (s.legacyFocusScore == null) s.legacyFocusScore = s.focusScore == null ? null : s.focusScore;
+        const dSec = (typeof s.distractionSec === 'number') ? s.distractionSec : (s.distractions || 0) * 20;
+        const next = computeFocusScore(s.durationMin || 0, s.distractions || 0, s.pauses || 0, dSec);
+        if (s.focusScore !== next) { s.focusScore = next; changed++; }
+      });
+      if (!app.data.settings) app.data.settings = defaultData().settings;
+      app.data.settings.scoreRecalcV114 = true;
+      saveState(); syncButtons(); refresh();
+      showToast(`已按统一口径重算 ${changed} 条记录，重算前的数据已备份 ✓`, 'success');
+    });
+
+    if (undo) undo.addEventListener('click', () => {
+      let raw = null;
+      try { raw = localStorage.getItem(SCORE_SNAPSHOT_KEY); } catch (e) { /* ignore */ }
+      if (!raw) { showToast('找不到重算前的备份，无法撤销', 'warning'); return; }
+      if (!window.confirm('撤销后恢复重算前的数据，确定吗？')) return;
+      try {
+        app.data = JSON.parse(raw);
+        try { localStorage.removeItem(SCORE_SNAPSHOT_KEY); } catch (e) { /* ignore */ }
+        saveState(); syncButtons(); refresh();
+        showToast('已撤销重算 ✓', 'success');
+      } catch (e) { showToast('备份文件损坏，撤销失败', 'warning'); }
+    });
+  }
+
   function renderMonthStats(year, month, filter) {
     const prefix = year + '-' + String(month + 1).padStart(2, '0');
     const monthSessions = app.data.sessions.filter(s => {
@@ -1600,6 +1817,7 @@
     app.timer.startedAt = new Date().toISOString();
     app.timer.distractions = 0;
     app.timer.distractionSec = 0;
+    app.timer.distractionByApp = {};
     app.timer.pauses = 0;
     updateLiveDistractions();
     // 启动前台「分心应用」监控（仅桌面端 Windows 生效）：名单 + 豁免白名单
@@ -1678,6 +1896,7 @@
         todoId: app.timer.linkedTodoId || null, category,
         distractions: app.timer.distractions || 0,
         distractionSec: app.timer.distractionSec || 0,
+        distractionByApp: Object.assign({}, app.timer.distractionByApp || {}),
         pauses: app.timer.pauses || 0,
         focusScore: computeFocusScore(elapsedMin, app.timer.distractions || 0, app.timer.pauses || 0, app.timer.distractionSec || 0)
       });
@@ -1864,13 +2083,20 @@
     const isFocusPhase = () => ['work', 'custom', 'stopwatch'].includes(app.timer.phase);
     const canCount = () => app.timer.running && isFocusPhase() && !app.shieldActive;
     const hasMonitor = !!(window.electronAPI && window.electronAPI.onFocusDistractionTime);
+    const bumpApp = (name, sec) => {
+      const k = normalizeAppKey(name);
+      if (!app.timer.distractionByApp) app.timer.distractionByApp = {};
+      app.timer.distractionByApp[k] = (app.timer.distractionByApp[k] || 0) + sec;
+    };
 
     // 桌面端：主进程按「停留时长」累计，每 3 秒上报一次，切应用次数只作段数统计
     if (hasMonitor) {
       window.electronAPI.onFocusDistractionTime(info => {
         if (!canCount()) return;
         if (info && info.entered) app.timer.distractions = (app.timer.distractions || 0) + 1;
-        app.timer.distractionSec = (app.timer.distractionSec || 0) + ((info && info.seconds) || 0);
+        const sec = (info && info.seconds) || 0;
+        app.timer.distractionSec = (app.timer.distractionSec || 0) + sec;
+        bumpApp(info && info.app, sec);
         updateLiveDistractions();
       });
     } else {
@@ -1880,6 +2106,7 @@
         if (!canCount() || floatWindowOpen) return;
         app.timer.distractions = (app.timer.distractions || 0) + 1;
         app.timer.distractionSec = (app.timer.distractionSec || 0) + 20;
+        bumpApp('unknown', 20);
         updateLiveDistractions();
       };
       window.addEventListener('blur', bumpFallback);
@@ -1896,6 +2123,7 @@
       clearBtn.addEventListener('click', () => {
         app.timer.distractions = 0;
         app.timer.distractionSec = 0;
+        app.timer.distractionByApp = {};
         updateLiveDistractions();
         showToast('已把本次分心归零，这段不算 ✨', 'success');
       });
@@ -2416,7 +2644,9 @@
     const shortEl = $('#setting-pomo-short');
     const longEl = $('#setting-pomo-long');
     const peakEl = $('#setting-peak-remind');
+    const shortcutsEl = $('#setting-shortcuts');
 
+    if (shortcutsEl) shortcutsEl.checked = s.shortcutsEnabled !== false;
     if (soundEl) soundEl.checked = s.soundEnabled !== false;
     if (notifyEl) notifyEl.checked = s.notifEnabled !== false;
     if (peakEl) peakEl.checked = s.peakRemindEnabled !== false;
@@ -2472,6 +2702,17 @@
         if (b) b.hidden = true;
       }
       showToast(peakEl.checked ? '高效时段提醒已开启 ⏰' : '高效时段提醒已关闭', 'success');
+    });
+
+    // 全局快捷键（主进程持久化，渲染层只做开关与状态同步）
+    const shortcutsEl = $('#setting-shortcuts');
+    if (shortcutsEl) shortcutsEl.addEventListener('change', async () => {
+      app.data.settings.shortcutsEnabled = shortcutsEl.checked;
+      saveState();
+      if (window.electronAPI && window.electronAPI.setShortcuts) {
+        try { await window.electronAPI.setShortcuts(shortcutsEl.checked); } catch (e) { /* ignore */ }
+      }
+      showToast(shortcutsEl.checked ? '全局快捷键已开启 ⌨' : '全局快捷键已关闭', 'success');
     });
 
     // 每日目标
@@ -3370,6 +3611,29 @@
     }
   }
 
+  function initShortcutBridge() {
+    const api = window.electronAPI;
+    if (!api) return;
+    // 主进程文件是开关的真源，启动时拉一次；老数据没有该字段时补默认值
+    if (api.getShortcuts) {
+      api.getShortcuts().then(r => {
+        app.data.settings.shortcutsEnabled = r.enabled !== false;
+        const el = document.querySelector('#setting-shortcuts');
+        if (el) el.checked = app.data.settings.shortcutsEnabled;
+      }).catch(() => {});
+    }
+    if (!api.onShortcutCommand) return;
+    api.onShortcutCommand(type => {
+      if (type !== 'toggle-timer') return;
+      const wasRunning = !!app.timer.running;
+      toggleTimer();
+      syncTrayState();
+      const msg = wasRunning ? '⏸ 已暂停专注' : '▶ 已开始专注';
+      if (document.visibilityState === 'visible') showToast(msg, 'info');
+      else if (api.showSystemNotification) api.showSystemNotification('此刻 FocusNow', msg).catch(() => {});
+    });
+  }
+
   /* ==========================================
      应用内更新弹窗（替代系统原生对话框）
      ========================================== */
@@ -3652,12 +3916,15 @@
     bindWindowControls();
     initUpdateUI();
     initTrayBridge();
+    initShortcutBridge();
     initFocusQuality();
     initReplan();
     initShield();
     initDistractionSettings();
     initSettingsCollapse();
     initPhaseModal();
+    initInsightExports();
+    initScoreRecalcUI();
     initBackupUI();
     initBackup(); // 内部按检测结果决定是否弹新手引导，避免与恢复弹窗叠加
     initPeakReminder();

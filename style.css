@@ -2422,6 +2422,25 @@ body {
 .insight-chip.tone-warn { background: var(--warning-pale); color: var(--warning); border-color: transparent; }
 .insight-chip.tone-neutral { background: var(--bg-soft); color: var(--text-secondary); }
 
+/* ========== 近 30 天洞察卡 ========== */
+.insight30 {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--card-radius); padding: 16px 18px; margin-bottom: 16px;
+  box-shadow: var(--card-shadow);
+}
+.insight30 .wn-head { margin-bottom: 12px; }
+.trend-chart { width: 100%; overflow: hidden; }
+.trend-chart svg { display: block; }
+.dist-top { margin-top: 14px; }
+.dist-title { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 8px; }
+.dist-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; font-size: 0.78rem; }
+.dist-name { width: 84px; flex: 0 0 84px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dist-bar { flex: 1; height: 6px; border-radius: 999px; background: var(--bg-soft); overflow: hidden; }
+.dist-bar i { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+.dist-val { width: 62px; flex: 0 0 62px; text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.dist-empty { font-size: 0.78rem; color: var(--text-muted); line-height: 1.6; }
+.insight-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+
 /* ========== 新手引导 ========== */
 .onboard-modal { max-width: 420px; text-align: center; padding: 32px 28px 24px; }
 .onboard-icon { font-size: 3rem; line-height: 1; margin-bottom: 14px; }

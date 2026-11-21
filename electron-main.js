@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, shell, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, ipcMain, Notification, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -23,6 +23,66 @@ function savePendingInstall(d) {
     else if (fs.existsSync(PENDING_INSTALL_FILE())) fs.unlinkSync(PENDING_INSTALL_FILE());
   } catch (e) { /* 忽略写入失败 */ }
   updateTrayMenu();
+}
+
+/* ========== 全局快捷键：开始/暂停、老板键、收起浮层 ========== */
+const SHORTCUT_FILE = () => path.join(app.getPath('userData'), '.shortcuts.json');
+const SHORTCUTS = {
+  'toggle-timer': 'Ctrl+Alt+S',
+  'toggle-hide': 'Ctrl+Alt+H',
+  'dismiss-overlay': 'Ctrl+Alt+E'
+};
+let shortcutsEnabled = true;
+
+function loadShortcutsEnabled() {
+  try {
+    if (fs.existsSync(SHORTCUT_FILE())) {
+      return JSON.parse(fs.readFileSync(SHORTCUT_FILE(), 'utf8')).enabled !== false;
+    }
+  } catch (e) { /* 配置损坏时回退默认开启 */ }
+  return true;
+}
+
+function sendShortcutCommand(type) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('shortcut-cmd', type);
+}
+
+function dismissOverlay() {
+  try { if (shieldWindow && !shieldWindow.isDestroyed() && shieldWindow.isVisible()) shieldWindow.hide(); } catch (e) {}
+  try { if (floatWindow && !floatWindow.isDestroyed() && floatWindow.isVisible()) floatWindow.hide(); } catch (e) {}
+}
+
+function toggleHideAll() {
+  const anyVisible = [mainWindow, floatWindow, shieldWindow]
+    .some(w => w && !w.isDestroyed() && w.isVisible());
+  if (anyVisible) {
+    dismissOverlay();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+  } else if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+}
+
+function registerShortcuts() {
+  globalShortcut.unregisterAll();
+  if (!shortcutsEnabled) return;
+  Object.keys(SHORTCUTS).forEach(type => {
+    try {
+      const ok = globalShortcut.register(SHORTCUTS[type], () => {
+        if (type === 'toggle-timer') sendShortcutCommand(type);
+        else if (type === 'toggle-hide') toggleHideAll();
+        else if (type === 'dismiss-overlay') dismissOverlay();
+      });
+      if (!ok) console.warn('[shortcut] 注册失败，可能被其他程序占用:', SHORTCUTS[type]);
+    } catch (e) { console.warn('[shortcut] 注册异常:', e.message); }
+  });
+}
+
+function setShortcutsEnabled(enabled) {
+  shortcutsEnabled = !!enabled;
+  try { fs.writeFileSync(SHORTCUT_FILE(), JSON.stringify({ enabled: shortcutsEnabled })); } catch (e) {}
+  registerShortcuts();
 }
 
 function sendTrayCommand(type) {
@@ -338,7 +398,7 @@ async function tickFg() {
       fgMonitor.lastDistract = true;
       // 按「停留时长」上报：每次轮询累加 FG_POLL_SEC 秒；entered 仅用于统计段数
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('focus-distraction-time', { seconds: FG_POLL_SEC, entered });
+        mainWindow.webContents.send('focus-distraction-time', { seconds: FG_POLL_SEC, entered, app: name });
       }
     } else {
       fgMonitor.lastDistract = false;
@@ -824,8 +884,17 @@ ipcMain.handle('app-quit', () => {
   app.quit();
 });
 
+/* 全局快捷键状态：主进程持久化，避免每次启动都要等渲染层同步 */
+ipcMain.handle('shortcuts-get', () => ({ enabled: shortcutsEnabled, bindings: SHORTCUTS }));
+ipcMain.handle('shortcuts-set', (e, enabled) => {
+  setShortcutsEnabled(enabled);
+  return { enabled: shortcutsEnabled };
+});
+
 /* ========== 应用生命周期 ========== */
 app.whenReady().then(() => {
+  shortcutsEnabled = loadShortcutsEnabled();
+  registerShortcuts();
   createWindow();
   createTray();
   checkPendingUpdate(); // 若上次更新已装好，启动后告知本次更新内容
@@ -837,6 +906,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  globalShortcut.unregisterAll();
 });
 
 app.on('activate', () => {

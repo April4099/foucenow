@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 托盘：渲染层上报今日专注与计时状态；接收托盘菜单命令
   setTrayState: (state) => ipcRenderer.invoke('set-tray-state', state),
   onTrayCommand: (callback) => ipcRenderer.on('tray-cmd', (event, type) => callback(type)),
+  // 全局快捷键：主进程直接触发的命令 + 启用状态
+  onShortcutCommand: (callback) => ipcRenderer.on('shortcut-cmd', (event, type) => callback(type)),
+  getShortcuts: () => ipcRenderer.invoke('shortcuts-get'),
+  setShortcuts: (enabled) => ipcRenderer.invoke('shortcuts-set', enabled),
   // 窗口控制
   winMin: () => ipcRenderer.invoke('win-min'),
   winMax: () => ipcRenderer.invoke('win-max'),
