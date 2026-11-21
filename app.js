@@ -3997,6 +3997,14 @@
       if (api.onUpdateProgress) api.onUpdateProgress(d => handleUpdateEvent('update-progress', d));
       if (api.onUpdateDownloaded) api.onUpdateDownloaded(d => handleUpdateEvent('update-downloaded', d));
       if (api.onUpdateDone) api.onUpdateDone(d => handleUpdateEvent('update-done', d));
+      if (api.onUpdateAutoInstalling) api.onUpdateAutoInstalling(d => {
+        showToast('已下载好的新版本 ' + (d && d.version ? 'v' + d.version : '') + ' 即将自动安装，稍等片刻 ✨', 'info');
+      });
+      if (api.onUpdateAutoInstallFailed) api.onUpdateAutoInstallFailed(() => {
+        updateFound = true;
+        refreshUpdateIndicators();
+        showToast('自动安装未完成，请点左下角版本号手动安装', 'warning');
+      });
       if (api.onUpdateError) api.onUpdateError(() => {
         downloadActive = false;
         if (!manualCheck) return; // 启动时自动检查失败不打扰，只有主动检查才弹

@@ -25,6 +25,21 @@ function savePendingInstall(d) {
   updateTrayMenu();
 }
 
+/* 自动安装尝试计数：防止安装包损坏时每次启动都反复触发安装 */
+const AUTO_INSTALL_ATTEMPTS_FILE = () => path.join(app.getPath('userData'), '.auto-install-attempts.json');
+function readAutoAttempts(version) {
+  try {
+    const d = JSON.parse(fs.readFileSync(AUTO_INSTALL_ATTEMPTS_FILE(), 'utf8'));
+    return d && d.version === version ? (Number(d.count) || 0) : 0;
+  } catch (e) { return 0; }
+}
+function writeAutoAttempts(version, count) {
+  try { fs.writeFileSync(AUTO_INSTALL_ATTEMPTS_FILE(), JSON.stringify({ version, count })); } catch (e) { /* ignore */ }
+}
+function clearAutoAttempts() {
+  try { if (fs.existsSync(AUTO_INSTALL_ATTEMPTS_FILE())) fs.unlinkSync(AUTO_INSTALL_ATTEMPTS_FILE()); } catch (e) { /* ignore */ }
+}
+
 /* ========== 全局快捷键：开始/暂停、老板键、收起浮层 ========== */
 const SHORTCUT_FILE = () => path.join(app.getPath('userData'), '.shortcuts.json');
 const SHORTCUTS = {
@@ -582,11 +597,29 @@ function checkPendingUpdate() {
           // 已经装到该版本 → 清掉待安装标记，稍后弹「更新完成」
           installedVersion = p.version;
           savePendingInstall(null);
+          clearAutoAttempts();
+        } else if (compareVersions(p.version, app.getVersion()) <= 0) {
+          // 标记版本已不比当前新（中途装过别的版本）→ 清掉陈旧标记，避免降级安装
+          savePendingInstall(null);
+          clearAutoAttempts();
         } else {
-          // 仍停在旧版本 → 启动 5 秒后静默重新下载（命中缓存），完成后直接提示安装
+          // 仍停在旧版本：优先用本地已下好的完整包直接自动安装，不再需要手动点
           pendingInstall = { version: p.version, notes: p.notes || '' };
-          silentRecheck = true;
-          updateTrayMenu();
+          const cached = downloadedExePath(p.version);
+          let hasCompletePkg = false;
+          try {
+            hasCompletePkg = fs.existsSync(cached) && fs.statSync(cached).size > 50 * 1024 * 1024;
+          } catch (e) { /* 文件异常视为不完整 */ }
+          if (hasCompletePkg) {
+            // 安装包已完整下载 → 重启后自动静默安装（带防循环计数）
+            updateTrayMenu();
+            setTimeout(() => scheduleAutoInstall(cached, p.version, p.notes || ''), 1500);
+          } else {
+            // 本地没有完整包 → 静默重新下载，下载完直接装（installAfterDownload）
+            silentRecheck = true;
+            installAfterDownload = true;
+            updateTrayMenu();
+          }
         }
       }
     } catch (e) { /* 忽略损坏的标记文件 */ }
@@ -793,6 +826,28 @@ async function startUpdateDownload() {
       mainWindow.webContents.send('update-error', { message: err.message || '下载失败' });
     }
   }
+}
+
+/* 启动恢复后的自动安装：给窗口一点就绪时间，带尝试次数防循环 */
+function scheduleAutoInstall(exePath, version, notes) {
+  const attempts = readAutoAttempts(version);
+  if (attempts >= 2) {
+    // 自动装了两次仍未生效（安装包损坏 / 安装被拦截）→ 不再自动重试，退回手动入口
+    console.log('[更新] 自动安装已尝试 ' + attempts + ' 次仍未成功，改为手动提示');
+    clearAutoAttempts();
+    pendingInstall = { version, notes: notes || '' };
+    updateTrayMenu();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-auto-install-failed', { version });
+    }
+    return;
+  }
+  writeAutoAttempts(version, attempts + 1);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-auto-installing', { version });
+  }
+  // 再延迟 2 秒，让用户看到提示，然后静默安装并退出
+  setTimeout(() => doInstall(exePath), 2000);
 }
 
 function doInstall(exePath) {

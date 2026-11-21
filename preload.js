@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateDone: (callback) => ipcRenderer.on('update-done', (event, data) => callback(data)),
   onUpdateNotAvailable: (callback) => ipcRenderer.on('update-not-available', () => callback()),
   onUpdateError: (callback) => ipcRenderer.on('update-error', (event, data) => callback(data)),
+  // 启动恢复后自动安装的提示（下载好的包重启即装）
+  onUpdateAutoInstalling: (callback) => ipcRenderer.on('update-auto-installing', (event, data) => callback(data)),
+  onUpdateAutoInstallFailed: (callback) => ipcRenderer.on('update-auto-install-failed', (event, data) => callback(data)),
   // 渲染端主动拉取可能错过的事件
   pullUpdateEvent: () => ipcRenderer.invoke('pull-update-event'),
   // 渲染端触发下载 / 重启安装
