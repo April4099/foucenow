@@ -228,6 +228,23 @@
               <div id="daily-list" class="daily-list"></div>
             </div>
 
+            <!-- 每日复盘三问 -->
+            <div class="review-card" id="review-card">
+              <div class="review-head">
+                <h3>🌙 今日复盘三问</h3>
+                <span class="review-sub" id="review-status">还没写</span>
+              </div>
+              <div class="review-questions">
+                <label><span>1 · 今天最专注的一件事？</span><input type="text" id="review-best" maxlength="120" placeholder="哪怕只有 20 分钟也算"></label>
+                <label><span>2 · 主要被什么打断了？</span><input type="text" id="review-block" maxlength="120" placeholder="消息、临时会议，还是自己走神"></label>
+                <label><span>3 · 明天想保护哪段时间？</span><input type="text" id="review-plan" maxlength="120" placeholder="例如：上午 9:30-11:00 不排会"></label>
+              </div>
+              <div class="review-actions">
+                <button class="btn-primary btn-sm" id="btn-save-review" type="button">保存今天的复盘</button>
+                <span class="review-tip">只存在本机 · 周报里可回看</span>
+              </div>
+            </div>
+
             <!-- 今日日程 -->
             <div class="section-block">
               <div class="section-header">
@@ -404,6 +421,7 @@
             </div>
             <p class="wn-text" id="week-narrative-text"></p>
             <div class="week-insights" id="week-insights"></div>
+            <div class="week-reviews" id="week-reviews"></div>
           </div>
 
           <!-- 近 30 天趋势与分心来源 -->
@@ -414,6 +432,7 @@
             </div>
             <div class="trend-chart" id="trend-chart"></div>
             <div class="dist-top" id="dist-top"></div>
+            <div class="recipe-card" id="best-recipe"></div>
             <div class="insight-actions">
               <button class="btn-secondary btn-sm" id="btn-export-week-png" type="button">导出周报图片</button>
               <button class="btn-secondary btn-sm" id="btn-export-week-csv" type="button">导出周报 CSV</button>
@@ -792,6 +811,15 @@
                 <option value="">— 不关联任务 —</option>
               </select>
             </div>
+          </div>
+
+          <div class="intention-card" id="intention-card">
+            <div class="intention-head">
+              <span class="intention-label">🎯 这一段的意图</span>
+              <span class="intention-hint" id="intention-hint">写一句话，结束时会被记进这段专注</span>
+            </div>
+            <input type="text" id="intention-input" maxlength="80" placeholder="例如：把方案第二版写完，中途不查消息">
+            <button class="btn-link intention-clear" id="btn-clear-intention" type="button">清空意图</button>
           </div>
 
           <div class="focus-stats-grid">

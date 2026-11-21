@@ -129,6 +129,7 @@
       distractionApps: ['wechat', 'chrome', 'msedge', 'firefox', 'steam', 'douyin', 'bilibili'],
       distractionAllow: [],
       unlockedAchievements: [],
+      reviews: {},
       settings: {
         pomodoroWork: 25,
         pomodoroShortBreak: 5,
@@ -169,6 +170,7 @@
       distractions: 0,
       distractionSec: 0,
       distractionByApp: {},
+      intention: '',
       pauses: 0
     },
     shieldActive: false
@@ -1360,6 +1362,7 @@
             <span class="day-item-title">${todo ? escapeHtml(todo.title) : '独立专注'}</span>
             ${catBadge(s.category || '专注')}
             ${s.focusScore != null ? `<span class="day-quality" title="专注质量 ${s.focusScore} 分（分心 ${s.distractions || 0} 次 / 暂停 ${s.pauses || 0} 次）">${qualityIcon(s.focusScore)}</span>` : ''}
+            ${s.intention ? `<span class="day-item-intention">🎯 ${escapeHtml(s.intention)}</span>` : ''}
           </div>`;
         }).join('')
       : '<div class="day-empty">暂无专注记录</div>';
@@ -1367,7 +1370,7 @@
 
   /* ---------- 本周回顾（叙事化） ---------- */
   /* ---------- 让数据说话：结束小结 / 今日摘要 / 高效时段提醒 ---------- */
-  function renderFocusSummary(elapsedMin) {
+  function renderFocusSummary(elapsedMin, intention) {
     const el = document.getElementById('focus-summary');
     if (!el) return;
     const today = todayStr();
@@ -1383,7 +1386,8 @@
         : (delta < 0 ? '比昨天少 ' + (-delta) + ' 分钟' : '与昨天持平'));
     el.innerHTML = '<div class="fs-head">✨ 本次 +' + elapsedMin + ' 分钟</div>'
       + '<div class="fs-body">今天累计 <b>' + todayMin + '</b> 分钟 · '
-      + escapeHtml(cmp) + ' · 连续 <b>' + computeStreak() + '</b> 天</div>';
+      + escapeHtml(cmp) + ' · 连续 <b>' + computeStreak() + '</b> 天</div>'
+      + (intention ? '<div class="fs-intention">🎯 ' + escapeHtml(intention) + '</div>' : '');
     el.hidden = false;
     el.classList.remove('pop');
     void el.offsetWidth; // 强制重排，让动画每次完成都重放
@@ -1541,13 +1545,19 @@
     const el = $('#week-narrative');
     if (!el) return;
     const data = buildWeekNarrative();
-    if (!data) { el.style.display = 'none'; return; }
+    const since = addDays(todayStr(), -6);
+    const hasReviews = Object.keys(app.data.reviews || {}).some(d => d >= since);
+    if (!data && !hasReviews) { el.style.display = 'none'; return; }
     el.style.display = '';
-    $('#week-narrative-text').textContent = data.text;
+    const textEl = $('#week-narrative-text');
+    if (textEl) textEl.textContent = data ? data.text : '这一周还没有专注记录，但复盘已经开始。';
     const ic = $('#week-insights');
     if (ic) {
-      ic.innerHTML = data.chips.map(c => `<span class="insight-chip tone-${c.tone}"><b>${c.label}</b> ${c.value}</span>`).join('');
+      ic.innerHTML = data
+        ? data.chips.map(c => `<span class="insight-chip tone-${c.tone}"><b>${c.label}</b> ${c.value}</span>`).join('')
+        : '';
     }
+    renderWeekReviews();
   }
 
   /* ==========================================
@@ -1569,6 +1579,71 @@
       Object.keys(detail).forEach(k => { dist[k] = (dist[k] || 0) + (detail[k] || 0); });
     });
     return { days, byDay, dist };
+  }
+
+  function computeBestRecipe() {
+    const since = addDays(todayStr(), -89);
+    const ss = (app.data.sessions || []).filter(s =>
+      s.date >= since && (s.durationMin || 0) > 0 && typeof s.focusScore === 'number');
+    if (ss.length < 3) return null;
+    const overall = ss.reduce((a, s) => a + s.focusScore, 0) / ss.length;
+    const weekNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    const slotOf = h => {
+      if (!Number.isFinite(h)) return '';
+      if (h >= 5 && h < 9) return '清晨';
+      if (h >= 9 && h < 12) return '上午';
+      if (h >= 12 && h < 14) return '午后';
+      if (h >= 14 && h < 18) return '下午';
+      if (h >= 18 && h < 22) return '晚间';
+      return '深夜';
+    };
+    const lenOf = m => m <= 25 ? '25 分钟内' : m <= 45 ? '26-45 分钟' : m <= 75 ? '46-75 分钟' : '75 分钟以上';
+    const dims = [
+      { key: 'day', get: s => weekNames[parseDate(s.date).getDay()] },
+      { key: 'slot', get: s => slotOf(parseInt((s.startTime || '').slice(11, 13), 10)) },
+      { key: 'len', get: s => lenOf(s.durationMin || 0) },
+      { key: 'cat', get: s => s.category || '其他' }
+    ];
+    const best = {};
+    dims.forEach(d => {
+      const groups = {};
+      ss.forEach(s => {
+        const k = d.get(s);
+        if (!k) return;
+        (groups[k] = groups[k] || []).push(s.focusScore);
+      });
+      let cand = null;
+      Object.keys(groups).forEach(k => {
+        const arr = groups[k];
+        if (arr.length < 2) return;
+        const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+        if (!cand || avg > cand.avg) cand = { k, avg, n: arr.length };
+      });
+      if (cand && cand.avg >= overall + 2) best[d.key] = cand;
+    });
+    if (!Object.keys(best).length) return null;
+    const top = Object.values(best).sort((a, b) => b.avg - a.avg)[0];
+    return { overall, best, top, n: ss.length };
+  }
+
+  function renderBestRecipe() {
+    const el = $('#best-recipe');
+    if (!el) return;
+    const r = computeBestRecipe();
+    if (!r) {
+      el.innerHTML = '<div class="recipe-empty">🎯 高光配方：再积累几次带质量分的专注，就能算出最适合你的时段、时长和任务类型。</div>';
+      return;
+    }
+    const b = r.best;
+    const parts = [];
+    if (b.day) parts.push(b.day.k);
+    if (b.slot) parts.push(b.slot.k);
+    if (b.len) parts.push(b.len.k);
+    if (b.cat) parts.push(b.cat.k + '类');
+    el.innerHTML = '<div class="recipe-title">🎯 你的高光配方</div>'
+      + '<div class="recipe-main">' + escapeHtml(parts.join(' · ')) + '</div>'
+      + '<div class="recipe-sub">这段时间平均质量 <b>' + Math.round(r.top.avg) + '</b> 分，比平时高 <b>'
+      + Math.round(r.top.avg - r.overall) + '</b> 分（基于 ' + r.top.n + ' 次记录）。重要任务可以照这个节奏安排。</div>';
   }
 
   function renderInsight30() {
@@ -1610,6 +1685,7 @@
         }).join('');
       }
     }
+    renderBestRecipe();
   }
 
   function downloadBlob(blob, filename) {
@@ -1818,6 +1894,8 @@
     app.timer.distractions = 0;
     app.timer.distractionSec = 0;
     app.timer.distractionByApp = {};
+    const intentionEl = $('#intention-input');
+    app.timer.intention = intentionEl ? (intentionEl.value || '').trim() : '';
     app.timer.pauses = 0;
     updateLiveDistractions();
     // 启动前台「分心应用」监控（仅桌面端 Windows 生效）：名单 + 豁免白名单
@@ -1897,12 +1975,13 @@
         distractions: app.timer.distractions || 0,
         distractionSec: app.timer.distractionSec || 0,
         distractionByApp: Object.assign({}, app.timer.distractionByApp || {}),
+        intention: app.timer.intention || '',
         pauses: app.timer.pauses || 0,
         focusScore: computeFocusScore(elapsedMin, app.timer.distractions || 0, app.timer.pauses || 0, app.timer.distractionSec || 0)
       });
       saveState();
       maybeBackup();
-      renderFocusSummary(elapsedMin);
+      renderFocusSummary(elapsedMin, app.timer.intention || '');
     }
 
     if (app.timer.mode === 'pomodoro' && !skipped) {
@@ -2583,20 +2662,32 @@
       swatches: ['#FF2E7E', '#282834', '#FF8FAB', '#0A0A0E', '#3DDC91']
     },
     candy: {
-      name: 'Candy Pop', desc: '糖果汽水',
-      swatches: ['#F4B8CA', '#8FC5EE', '#FFE39A', '#B9E4CE', '#CBBDEC']
+      name: 'Candy Pop', desc: '糖果汽水 · 高对比',
+      swatches: ['#2F6FAE', '#6FA5D8', '#A65385', '#2F8F63', '#C9455E']
     },
     midnight: {
       name: 'Midnight', desc: '夜间数字世界',
       swatches: ['#E58BB9', '#303C68', '#F1CF76', '#72C9C0', '#9890ED']
     },
     matcha: {
-      name: 'Matcha', desc: '抹茶甜品',
-      swatches: ['#B9D8B7', '#789F78', '#F4E4C9', '#D7B99B', '#E7EDCF']
+      name: 'Matcha', desc: '抹茶甜品 · 高对比',
+      swatches: ['#4E7A52', '#86AC88', '#9A7550', '#3B7D45', '#B45A45']
     },
     strawberry: {
-      name: 'Strawberry', desc: '草莓奶油',
-      swatches: ['#F2A9BD', '#E98D9E', '#FFF0D9', '#D8C0E9', '#F8D9DF']
+      name: 'Strawberry', desc: '草莓奶油 · 高对比',
+      swatches: ['#B75575', '#DB8AA4', '#8B5AA8', '#3F8A63', '#C45672']
+    },
+    ocean: {
+      name: 'Ocean', desc: '深海蓝',
+      swatches: ['#4FC3D9', '#7FE3C4', '#142A38', '#F2C56B', '#5FD9A8']
+    },
+    paper: {
+      name: 'Paper', desc: '纸墨 · 浅色高对比',
+      swatches: ['#2F5D8C', '#8A6A43', '#357A5B', '#B34A4A', '#F5F2EA']
+    },
+    aurora: {
+      name: 'Aurora', desc: '极光夜色',
+      swatches: ['#A98BFF', '#66E3C0', '#221A3A', '#F2C56B', '#6ED7A8']
     }
   };
 
@@ -3634,6 +3725,84 @@
     });
   }
 
+  function initIntention() {
+    const input = $('#intention-input');
+    const hint = $('#intention-hint');
+    const clearBtn = $('#btn-clear-intention');
+    const syncHint = () => {
+      if (!hint) return;
+      hint.textContent = app.timer.running
+        ? '这段进行中，现在改的文字会计入本次'
+        : '写一句话，结束时会被记进这段专注';
+    };
+    syncHint();
+    if (input) input.addEventListener('input', () => {
+      if (app.timer.running) app.timer.intention = (input.value || '').trim();
+      syncHint();
+    });
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      if (input) input.value = '';
+      app.timer.intention = '';
+      if (hint) hint.textContent = '已清空，下一句会更明确';
+      showToast('意图已清空', 'info');
+    });
+  }
+
+  function initReview() {
+    const best = $('#review-best');
+    const block = $('#review-block');
+    const plan = $('#review-plan');
+    const status = $('#review-status');
+    const saved = $('#btn-save-review');
+    const today = todayStr();
+    const entry = (app.data.reviews || {})[today];
+    if (best) best.value = entry ? (entry.best || '') : '';
+    if (block) block.value = entry ? (entry.block || '') : '';
+    if (plan) plan.value = entry ? (entry.plan || '') : '';
+    const syncStatus = () => {
+      if (!status) return;
+      status.textContent = entry ? '已保存 · ' + (entry.savedAt || '').slice(11, 16) : '还没写';
+    };
+    syncStatus();
+    if (saved) saved.addEventListener('click', () => {
+      const data = {
+        best: best ? (best.value || '').trim() : '',
+        block: block ? (block.value || '').trim() : '',
+        plan: plan ? (plan.value || '').trim() : '',
+        savedAt: new Date().toISOString()
+      };
+      if (!data.best && !data.block && !data.plan) {
+        showToast('三问至少写一问再保存 ✍️', 'warning');
+        return;
+      }
+      app.data.reviews[today] = data;
+      saveState();
+      syncStatus();
+      renderWeekReviews();
+      showToast('今天的复盘已收好 🌙', 'success');
+    });
+  }
+
+  function renderWeekReviews() {
+    const wrap = $('#week-reviews');
+    if (!wrap) return;
+    const end = todayStr();
+    const days = Array.from({ length: 7 }, (_, i) => addDays(end, i - 6));
+    const reviews = app.data.reviews || {};
+    const entries = days.filter(d => reviews[d]).map(d => ({ date: d, r: reviews[d] }));
+    if (!entries.length) {
+      wrap.innerHTML = '<div class="review-entry"><span>还没有复盘记录。在「今日」页面写下三问，一周后回看会很不一样。</span></div>';
+      return;
+    }
+    wrap.innerHTML = entries.map(({ date, r }) => {
+      const parts = [];
+      if (r.best) parts.push('<b>专注：</b>' + escapeHtml(r.best));
+      if (r.block) parts.push('<b>打断：</b>' + escapeHtml(r.block));
+      if (r.plan) parts.push('<b>明天：</b>' + escapeHtml(r.plan));
+      return `<div class="review-entry">${formatDateCN(date)} · ${parts.join('　')}</div>`;
+    }).join('');
+  }
+
   /* ==========================================
      应用内更新弹窗（替代系统原生对话框）
      ========================================== */
@@ -3897,6 +4066,7 @@
      ========================================== */
   function init() {
     if (!app.data.settings) app.data.settings = defaultData().settings;
+    if (!app.data.reviews || typeof app.data.reviews !== 'object') app.data.reviews = {};
     if (!app.data.todos) app.data.todos = [];
     if (!app.data.events) app.data.events = [];
     if (!app.data.sessions) app.data.sessions = [];
@@ -3917,6 +4087,8 @@
     initUpdateUI();
     initTrayBridge();
     initShortcutBridge();
+    initIntention();
+    initReview();
     initFocusQuality();
     initReplan();
     initShield();
