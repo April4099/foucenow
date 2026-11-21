@@ -3014,3 +3014,213 @@ body, .sidebar, .app-header {
   animation: progressShine 1.6s linear infinite;
 }
 @keyframes progressShine { to { transform: translateX(100%); } }
+
+/* ========== v1.18 当前专注位 ========== */
+.focus-now-card {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 28px; padding: 24px 30px;
+  background: linear-gradient(120deg,
+    color-mix(in srgb, var(--primary) 22%, var(--bg-card)),
+    var(--bg-card) 55%,
+    color-mix(in srgb, var(--accent) 16%, var(--bg-card)));
+  border: 1px solid var(--border-light); border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow); position: relative; overflow: hidden;
+}
+.focus-now-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--primary); border-radius: 4px 0 0 4px;
+}
+.focus-now-card.is-running { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary-pale), var(--card-shadow); }
+.fnc-main { flex: 1; min-width: 0; }
+.fnc-eyebrow { font-size: 0.74rem; color: var(--primary); font-weight: 600; letter-spacing: 0.06em; margin-bottom: 8px; }
+.fnc-headline { font-size: 1.35rem; font-weight: 700; color: var(--text); line-height: 1.35; margin-bottom: 6px; }
+.fnc-detail { font-size: 0.86rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 14px; }
+.fnc-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.fnc-actions button { min-width: 96px; }
+.fnc-ring-wrap { position: relative; width: 120px; height: 120px; flex: none; }
+.fnc-ring { width: 120px; height: 120px; transform: rotate(-90deg); }
+.fnc-ring-bg { fill: none; stroke: var(--border); stroke-width: 8; }
+.fnc-ring-fill {
+  fill: none; stroke: var(--primary); stroke-width: 8; stroke-linecap: round;
+  stroke-dasharray: 326.7; stroke-dashoffset: 326.7;
+  transition: stroke-dashoffset 0.4s var(--ease-out, ease-out);
+}
+.fnc-ring-text {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.fnc-ring-text span { font-family: "SF Mono", "Consolas", monospace; font-size: 1.1rem; font-weight: 700; color: var(--text); }
+.fnc-ring-text small { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+.fnc-focus-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; color: var(--danger);
+  background: var(--danger-pale); padding: 4px 10px; border-radius: 999px;
+  margin-left: 8px;
+}
+
+/* ========== 今日洞察卡 ========== */
+.daily-insight {
+  grid-column: 1 / -1;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--card-radius); padding: 16px 20px;
+  box-shadow: var(--card-shadow);
+}
+.di-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.di-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+.di-sub { font-size: 0.72rem; color: var(--text-muted); }
+.di-text { font-size: 0.86rem; line-height: 1.7; color: var(--text-secondary); margin: 0; }
+.di-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+
+/* ========== 洞察时光轴 ========== */
+.insight-timeline {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--card-radius); padding: 16px 18px; margin-bottom: 16px;
+  box-shadow: var(--card-shadow);
+}
+.timeline-list { margin-top: 12px; }
+.timeline-entry {
+  position: relative; padding: 0 0 14px 22px;
+  border-left: 2px solid var(--border); margin-left: 6px;
+}
+.timeline-entry:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline-entry::before {
+  content: ''; position: absolute; left: -6px; top: 4px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--primary); border: 2px solid var(--bg-card);
+}
+.timeline-date { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 3px; }
+.timeline-text { font-size: 0.82rem; color: var(--text); line-height: 1.6; }
+
+/* ========== Ctrl+K 命令面板 ========== */
+.cmd-overlay { align-items: flex-start; padding-top: 12vh; z-index: 400; }
+.cmd-panel {
+  width: 100%; max-width: 560px;
+  background: var(--bg-elevated, var(--bg-card));
+  border: 1px solid var(--border-light); border-radius: 16px;
+  box-shadow: 0 32px 90px rgba(0,0,0,0.5);
+  overflow: hidden;
+  animation: cmdIn 0.22s var(--ease-out, ease-out) both;
+}
+@keyframes cmdIn {
+  from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cmd-search {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 18px; border-bottom: 1px solid var(--border);
+}
+.cmd-icon { font-size: 1.3rem; color: var(--primary); line-height: 1; }
+.cmd-search input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  color: var(--text); font-family: inherit; font-size: 1rem;
+}
+.cmd-search input::placeholder { color: var(--text-muted); }
+.cmd-search kbd, .cmd-footer kbd {
+  font-family: inherit; font-size: 0.68rem; padding: 2px 6px;
+  border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text-muted); background: var(--bg-soft);
+}
+.cmd-results { max-height: 360px; overflow-y: auto; padding: 8px; }
+.cmd-empty { padding: 28px 12px; text-align: center; color: var(--text-muted); font-size: 0.84rem; }
+.cmd-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 10px; cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.cmd-item:hover, .cmd-item.selected {
+  background: var(--primary-pale); transform: translateX(2px);
+}
+.cmd-item.selected { box-shadow: inset 2px 0 0 var(--primary); }
+.cmd-item-icon {
+  width: 32px; height: 32px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-soft); border-radius: 8px; font-size: 1rem;
+}
+.cmd-item-text { flex: 1; min-width: 0; }
+.cmd-item-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+.cmd-item-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+.cmd-footer {
+  display: flex; gap: 16px; padding: 10px 18px;
+  border-top: 1px solid var(--border); font-size: 0.72rem; color: var(--text-muted);
+}
+.cmd-footer span { display: inline-flex; align-items: center; gap: 4px; }
+
+@media (max-width: 760px) {
+  .focus-now-card { flex-direction: column; align-items: flex-start; }
+  .fnc-ring-wrap { align-self: center; }
+}
+
+/* ========== v1.18 日记 ========== */
+.journal-editor {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--card-radius); padding: 20px 22px; margin-bottom: 22px;
+  box-shadow: var(--card-shadow);
+}
+.je-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.je-head > div { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.je-date {
+  background: var(--bg-soft); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 7px 10px; font-family: inherit; font-size: 0.86rem;
+}
+.je-status { font-size: 0.72rem; color: var(--text-muted); }
+.je-title {
+  width: 100%; background: transparent; border: none; outline: none;
+  color: var(--text); font-family: inherit; font-size: 1.15rem; font-weight: 600;
+  padding: 6px 0 12px; border-bottom: 1px solid var(--border); margin-bottom: 12px;
+}
+.je-title::placeholder, .je-content::placeholder { color: var(--text-muted); }
+.je-moods { display: flex; gap: 8px; margin-bottom: 14px; }
+.je-moods button {
+  width: 38px; height: 38px; border-radius: 10px; font-size: 1.2rem;
+  background: var(--bg-soft); border: 1px solid var(--border); cursor: pointer;
+  transition: transform 0.18s var(--ease-out, ease-out), background 0.18s, border-color 0.18s;
+}
+.je-moods button:hover { transform: translateY(-3px) scale(1.08); }
+.je-moods button.selected {
+  background: var(--primary-pale); border-color: var(--primary);
+  transform: translateY(-2px) scale(1.06);
+}
+.je-content {
+  width: 100%; min-height: 190px; resize: vertical;
+  background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text); font-family: inherit; font-size: 0.92rem; line-height: 1.8;
+  padding: 14px 16px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+}
+.je-content:focus { border-color: var(--primary); box-shadow: 0 0 8px var(--primary-glow); }
+.je-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.je-tags {
+  flex: 1; min-width: 160px; background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; color: var(--text); font-family: inherit; font-size: 0.82rem;
+}
+.je-actions { display: flex; gap: 10px; }
+
+.journal-list-wrap {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--card-radius); padding: 18px 20px; box-shadow: var(--card-shadow);
+}
+.journal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.journal-toolbar h3 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.journal-count { font-size: 0.72rem; color: var(--text-muted); margin-left: 6px; font-weight: 400; }
+.journal-search {
+  background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; color: var(--text); font-family: inherit; font-size: 0.82rem; min-width: 180px;
+}
+.journal-list { display: grid; gap: 12px; }
+.journal-entry {
+  border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+  background: var(--bg-soft); cursor: pointer;
+  transition: transform 0.18s var(--ease-out, ease-out), border-color 0.18s, box-shadow 0.18s;
+}
+.journal-entry:hover { transform: translateY(-2px); border-color: var(--primary); box-shadow: var(--lift-shadow); }
+.je-entry-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.je-entry-date { font-size: 0.74rem; color: var(--text-muted); }
+.je-entry-title { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+.je-entry-mood { font-size: 1.1rem; }
+.je-entry-body {
+  font-size: 0.84rem; color: var(--text-secondary); line-height: 1.65;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.je-entry-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.je-tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 999px; background: var(--primary-pale); color: var(--primary); }
+.journal-empty { text-align: center; padding: 30px 12px; color: var(--text-muted); font-size: 0.84rem; line-height: 1.7; }

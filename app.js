@@ -130,6 +130,8 @@
       distractionAllow: [],
       unlockedAchievements: [],
       reviews: {},
+      insights: {},
+      journals: {},
       settings: {
         pomodoroWork: 25,
         pomodoroShortBreak: 5,
@@ -371,7 +373,7 @@
      ========================================== */
   const viewTitles = {
     today: '今日', todos: '待办', schedule: '日程',
-    calendar: '日历', focus: '专注计时', settings: '设置'
+    calendar: '日历', focus: '专注计时', journal: '日记', settings: '设置'
   };
 
   function switchView(view) {
@@ -390,6 +392,7 @@
     if (view === 'calendar') renderCalendar();
     if (view === 'focus') { renderFocus(); renderFocusTodoSelect(); }
     if (view === 'today') renderToday();
+    if (view === 'journal') { renderJournalList(); renderJournalEditor(journalEditingDate || todayStr()); }
     if (view === 'todos') renderTodos();
     if (view === 'settings') { renderThemeSelector(); loadSettingsUI(); }
   }
@@ -477,6 +480,8 @@
     $('#motivation-text').textContent = motives[Math.floor(Math.random() * motives.length)];
     renderGrowth();
     renderTodayInsight();
+    renderFocusNow();
+    renderDailyInsight();
   }
 
   function renderNextReminder() {
@@ -1304,6 +1309,7 @@
     // 本周回顾（叙事化）
     renderWeekNarrative();
     renderInsight30();
+    renderTimeline();
     renderAchievements();
   }
 
@@ -2247,6 +2253,9 @@
     $('.timer-hero').classList.toggle('break-mode', ['shortBreak', 'longBreak'].includes(t.phase));
 
     $$('.phase-chip').forEach(c => c.classList.toggle('active', c.dataset.phase === t.phase));
+
+    // 同步首页当前专注位的实时显示
+    if (typeof syncFocusNowRing === 'function') syncFocusNowRing();
 
     // 同步悬浮钟
     if (typeof updateFloatingDisplay === 'function') updateFloatingDisplay();
@@ -3804,6 +3813,413 @@
   }
 
   /* ==========================================
+     v1.18 · 当前专注位
+     ========================================== */
+  function pickNextTask() {
+    const today = todayStr();
+    const now = nowHM();
+    // 优先：正在进行的日程
+    const ongoing = getEventsForDate(today).find(e => e.start <= now && (!e.end || e.end >= now));
+    if (ongoing) return { kind: 'event', title: ongoing.title, sub: '日程进行中 · ' + ongoing.start, ref: ongoing };
+    // 其次：下一个日程（2 小时内）
+    const next = getEventsForDate(today).filter(e => e.start > now).sort((a, b) => a.start.localeCompare(b.start))[0];
+    if (next) {
+      const diff = minutesFromHM(next.start) - minutesFromHM(now);
+      if (diff <= 120) return { kind: 'event', title: next.title, sub: diff + ' 分钟后开始 · ' + next.start, ref: next };
+    }
+    // 再其次：未完成待办，按优先级
+    const rank = { high: 0, medium: 1, low: 2 };
+    const todos = app.data.todos.filter(t => !t.completed)
+      .sort((a, b) => (rank[a.priority] ?? 3) - (rank[b.priority] ?? 3));
+    if (todos.length) {
+      const t = todos[0];
+      const label = t.priority === 'high' ? '高优先级' : t.priority === 'medium' ? '中优先级' : '待办';
+      return { kind: 'todo', title: t.title, sub: label + (t.due ? ' · ' + (t.due === today ? '今天截止' : t.due) : ''), ref: t };
+    }
+    return null;
+  }
+
+  function renderFocusNow() {
+    const card = $('#focus-now-card');
+    if (!card) return;
+    const t = app.timer;
+    const eyebrow = $('#fnc-eyebrow');
+    const headline = $('#fnc-headline');
+    const detail = $('#fnc-detail');
+    const actions = $('#fnc-actions');
+    card.classList.toggle('is-running', !!t.running);
+
+    if (t.running || t.remaining < t.total) {
+      const isBreak = ['shortBreak', 'longBreak'].includes(t.phase);
+      eyebrow.textContent = isBreak ? '此刻 · 休息中' : '此刻 · 正在专注';
+      let title = t.intention || (t.linkedTodoId
+        ? (app.data.todos.find(x => x.id === t.linkedTodoId) || {}).title
+        : null) || (isBreak ? '放松一下，等会儿继续' : '专注进行中');
+      headline.textContent = title;
+      const sec = t.distractionSec || 0;
+      const distText = sec > 0 ? `<span class="fnc-focus-tag">分心 ${sec >= 60 ? Math.floor(sec / 60) + '分' : sec + '秒'}</span>` : '';
+      detail.innerHTML = (isBreak ? '休息时不计分心，安心放松' : '保持这个节奏，别切走') + distText;
+      actions.innerHTML = '<button class="btn-primary btn-sm" id="fnc-go-focus">查看专注页</button>'
+        + (t.running ? '<button class="btn-secondary btn-sm" id="fnc-pause">暂停</button>' : '<button class="btn-secondary btn-sm" id="fnc-resume">继续</button>');
+      const a1 = $('#fnc-go-focus'); if (a1) a1.addEventListener('click', () => switchView('focus'));
+      const a2 = $('#fnc-pause'); if (a2) a2.addEventListener('click', () => { toggleTimer(); renderFocusNow(); });
+      const a3 = $('#fnc-resume'); if (a3) a3.addEventListener('click', () => { toggleTimer(); renderFocusNow(); });
+    } else {
+      const next = pickNextTask();
+      eyebrow.textContent = '此刻 · 专注位';
+      if (next) {
+        headline.textContent = next.title;
+        detail.textContent = next.sub + ' · 现在开始正合适';
+        actions.innerHTML = '<button class="btn-primary btn-sm" id="fnc-start">开始专注</button>'
+          + '<button class="btn-secondary btn-sm" id="fnc-go-schedule">看看安排</button>';
+        const s1 = $('#fnc-start'); if (s1) s1.addEventListener('click', () => {
+          if (next.kind === 'todo') {
+            app.timer.linkedTodoId = next.ref.id;
+            renderFocusTodoSelect();
+          }
+          switchView('focus'); startTimer(); renderFocusNow();
+          showToast('已开始专注 · ' + next.title, 'success');
+        });
+        const s2 = $('#fnc-go-schedule'); if (s2) s2.addEventListener('click', () => switchView('schedule'));
+      } else {
+        headline.textContent = '今天还没有安排';
+        detail.textContent = '添加一件想做的事，或者直接用秒表开始';
+        actions.innerHTML = '<button class="btn-primary btn-sm" id="fnc-add-todo">添加待办</button>'
+          + '<button class="btn-secondary btn-sm" id="fnc-go-focus2">去专注页</button>';
+        const b1 = $('#fnc-add-todo'); if (b1) b1.addEventListener('click', () => openTodoModal());
+        const b2 = $('#fnc-go-focus2'); if (b2) b2.addEventListener('click', () => switchView('focus'));
+      }
+    }
+    syncFocusNowRing();
+  }
+
+  function syncFocusNowRing() {
+    const ring = $('#fnc-ring-fill');
+    const time = $('#fnc-time');
+    const label = $('#fnc-ring-label');
+    if (!ring || !time) return;
+    const t = app.timer;
+    const circ = 2 * Math.PI * 52;
+    ring.style.strokeDasharray = circ;
+    if (t.running || t.remaining < t.total) {
+      const progress = t.total > 0 ? (t.mode === 'stopwatch' ? 1 : t.remaining / t.total) : 1;
+      ring.style.strokeDashoffset = circ * (1 - progress);
+      time.textContent = formatSecs(t.remaining);
+      label.textContent = t.running ? '进行中' : '已暂停';
+    } else {
+      ring.style.strokeDashoffset = circ;
+      const min = app.data.settings.pomodoroWork || 25;
+      time.textContent = String(min).padStart(2, '0') + ':00';
+      label.textContent = '待开始';
+    }
+  }
+
+  /* ==========================================
+     v1.18 · 洞察卡与时光轴
+     ========================================== */
+  function buildDailyInsight(date) {
+    const sessions = (app.data.sessions || []).filter(s => s.date === date);
+    const min = sessions.reduce((a, s) => a + (s.durationMin || 0), 0);
+    const done = (app.data.todos || []).filter(t => t.completed && t.completedAt && t.completedAt.startsWith(date)).length;
+    const review = (app.data.reviews || {})[date];
+    const avgQ = sessions.length
+      ? Math.round(sessions.reduce((a, s) => a + (s.focusScore || 0), 0) / sessions.length) : 0;
+    if (!sessions.length && !done && !review) return null;
+    const qText = avgQ >= 85 ? '质量很高' : avgQ >= 70 ? '状态稳定' : avgQ > 0 ? '有点起伏' : '';
+    let text = '';
+    if (min >= 120) text = `今天专注了 ${min} 分钟${qText ? '，' + qText : ''}。${done ? '还完成了 ' + done + ' 件事，' : ''}这是个扎实的一天。`;
+    else if (min >= 60) text = `今天专注了 ${min} 分钟${qText ? '，' + qText : ''}。${done ? '完成 ' + done + ' 件事，' : ''}节奏刚刚好。`;
+    else if (min > 0) text = `今天有 ${min} 分钟的专注${qText ? '，' + qText : ''}。不必求多，开始本身就很了不起。`;
+    else text = `今天还没有专注记录${done ? '，但已经完成了 ' + done + ' 件事' : ''}。留一段时间给自己吧。`;
+    if (review && review.plan) text += ' 你写下想保护的时间：' + review.plan;
+    return { text, date, createdAt: new Date().toISOString() };
+  }
+
+  function renderDailyInsight() {
+    const wrap = $('#daily-insight');
+    if (!wrap) return;
+    const today = todayStr();
+    const diDate = $('#di-date'); if (diDate) diDate.textContent = formatDateCN(today);
+    const textEl = $('#di-text'); if (!textEl) return;
+    const saved = (app.data.insights || {})[today];
+    const entry = saved || buildDailyInsight(today);
+    textEl.textContent = entry ? entry.text : '开始专注后，这里会出现属于今天的观察。';
+    const btn = $('#btn-gen-insight');
+    if (btn) btn.textContent = saved ? '重新生成' : '生成今日洞察';
+  }
+
+  function initInsightUI() {
+    const gen = $('#btn-gen-insight');
+    if (gen) gen.addEventListener('click', () => {
+      const today = todayStr();
+      const entry = buildDailyInsight(today);
+      if (!entry) { showToast('先专注一会儿或写点复盘，再生成洞察', 'warning'); return; }
+      if (!app.data.insights || typeof app.data.insights !== 'object') app.data.insights = {};
+      app.data.insights[today] = entry;
+      saveState(); renderDailyInsight(); renderTimeline();
+      showToast('今日洞察已收进时光轴 💡', 'success');
+    });
+    const goto = $('#btn-goto-timeline');
+    if (goto) goto.addEventListener('click', () => {
+      switchView('calendar');
+      setTimeout(() => { const el = $('#insight-timeline'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
+    });
+  }
+
+  function renderTimeline() {
+    const list = $('#timeline-list');
+    if (!list) return;
+    const entries = Object.keys(app.data.insights || {})
+      .filter(d => (app.data.insights[d] || {}).text)
+      .sort((a, b) => b.localeCompare(a)).slice(0, 30);
+    const count = $('#timeline-count');
+    if (count) count.textContent = entries.length + ' 条记录';
+    if (!entries.length) {
+      list.innerHTML = '<div class="timeline-entry"><div class="timeline-date">还没有记录</div><div class="timeline-text">在今日页生成一条洞察，它会被收进这里，随时回看。</div></div>';
+      return;
+    }
+    list.innerHTML = entries.map(d =>
+      `<div class="timeline-entry"><div class="timeline-date">${formatDateCN(d, true)}</div><div class="timeline-text">${escapeHtml(app.data.insights[d].text)}</div></div>`
+    ).join('');
+  }
+
+  /* ==========================================
+     v1.18 · 日记
+     ========================================== */
+  let journalMood = '';
+  let journalEditingDate = null;
+
+  function renderJournalEditor(date) {
+    const d = date || todayStr();
+    journalEditingDate = d;
+    const dateEl = $('#journal-date'); if (dateEl) dateEl.value = d;
+    const entry = (app.data.journals || {})[d];
+    const titleEl = $('#journal-title'); if (titleEl) titleEl.value = entry ? (entry.title || '') : '';
+    const contentEl = $('#journal-content'); if (contentEl) contentEl.value = entry ? (entry.content || '') : '';
+    const tagsEl = $('#journal-tags'); if (tagsEl) tagsEl.value = entry && entry.tags ? entry.tags.join(', ') : '';
+    journalMood = entry ? (entry.mood || '') : '';
+    $$('#je-moods button').forEach(b => b.classList.toggle('selected', b.dataset.mood === journalMood));
+    const status = $('#journal-status');
+    if (status) status.textContent = entry ? '上次保存 ' + (entry.updatedAt || '').slice(0, 16).replace('T', ' ') : '自动保存在本机';
+    const del = $('#btn-journal-delete'); if (del) del.style.display = entry ? '' : 'none';
+  }
+
+  function saveJournal() {
+    const d = ($('#journal-date') && $('#journal-date').value) || todayStr();
+    const title = ($('#journal-title') && $('#journal-title').value || '').trim();
+    const content = ($('#journal-content') && $('#journal-content').value || '').trim();
+    const tagsRaw = ($('#journal-tags') && $('#journal-tags').value || '').trim();
+    if (!title && !content) { showToast('写点什么再保存吧 ✍️', 'warning'); return; }
+    if (!app.data.journals || typeof app.data.journals !== 'object') app.data.journals = {};
+    app.data.journals[d] = {
+      title, content, mood: journalMood,
+      tags: tagsRaw ? tagsRaw.split(/[,，]/).map(s => s.trim()).filter(Boolean) : [],
+      updatedAt: new Date().toISOString()
+    };
+    saveState(); renderJournalList(); renderJournalEditor(d);
+    showToast('日记已保存 📖', 'success');
+  }
+
+  function journalSnapshot() {
+    const d = ($('#journal-date') && $('#journal-date').value) || todayStr();
+    const sessions = (app.data.sessions || []).filter(s => s.date === d);
+    const min = sessions.reduce((a, s) => a + (s.durationMin || 0), 0);
+    const done = (app.data.todos || []).filter(t => t.completed && t.completedAt && t.completedAt.startsWith(d)).length;
+    const avg = sessions.length ? Math.round(sessions.reduce((a, s) => a + (s.focusScore || 0), 0) / sessions.length) : 0;
+    const line = `\n【${formatDateCN(d)} 数据快照】专注 ${min} 分钟 · ${sessions.length} 次专注 · 完成 ${done} 件事${avg ? ' · 平均质量 ' + avg + ' 分' : ''}\n`;
+    const el = $('#journal-content');
+    if (el) { el.value += line; el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+    showToast('已插入当日数据', 'info');
+  }
+
+  function renderJournalList() {
+    const list = $('#journal-list');
+    if (!list) return;
+    const q = (($('#journal-search') && $('#journal-search').value) || '').trim().toLowerCase();
+    const entries = Object.keys(app.data.journals || {})
+      .filter(d => app.data.journals[d] && (app.data.journals[d].content || app.data.journals[d].title))
+      .sort((a, b) => b.localeCompare(a));
+    const shown = q ? entries.filter(d => {
+      const j = app.data.journals[d];
+      const hay = (j.title + ' ' + j.content + ' ' + (j.tags || []).join(' ')).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    }) : entries;
+    const count = $('#journal-count'); if (count) count.textContent = entries.length;
+    if (!shown.length) {
+      list.innerHTML = '<div class="journal-empty">' + (q ? '没有匹配的日记' : '还没有日记。写下第一篇，记录今天的生活。') + '</div>';
+      return;
+    }
+    list.innerHTML = shown.map(d => {
+      const j = app.data.journals[d];
+      const body = (j.content || '').replace(/\n/g, ' ').slice(0, 160);
+      return `<div class="journal-entry" data-date="${d}">
+        <div class="je-entry-head">
+          <span class="je-entry-date">${formatDateCN(d, true)}</span>
+          ${j.mood ? '<span class="je-entry-mood">' + escapeHtml(j.mood) + '</span>' : ''}
+          <span class="je-entry-title">${escapeHtml(j.title || '（无标题）')}</span>
+        </div>
+        <div class="je-entry-body">${escapeHtml(body)}</div>
+        ${j.tags && j.tags.length ? '<div class="je-entry-tags">' + j.tags.map(t => '<span class="je-tag">' + escapeHtml(t) + '</span>').join('') + '</div>' : ''}
+      </div>`;
+    }).join('');
+    $$('.journal-entry', list).forEach(el => el.addEventListener('click', () => {
+      renderJournalEditor(el.dataset.date);
+      $('#journal-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+  }
+
+  function initJournal() {
+    const dateEl = $('#journal-date');
+    if (dateEl) dateEl.addEventListener('change', () => renderJournalEditor(dateEl.value));
+    $$('#je-moods button').forEach(b => b.addEventListener('click', () => {
+      journalMood = b.dataset.mood;
+      $$('#je-moods button').forEach(x => x.classList.toggle('selected', x === b));
+    }));
+    const save = $('#btn-journal-save'); if (save) save.addEventListener('click', saveJournal);
+    const snap = $('#btn-journal-snapshot'); if (snap) snap.addEventListener('click', journalSnapshot);
+    const del = $('#btn-journal-delete'); if (del) del.addEventListener('click', () => {
+      const d = journalEditingDate;
+      if (!d || !(app.data.journals || {})[d]) return;
+      if (!window.confirm('删除 ' + formatDateCN(d) + ' 的日记？此操作不可撤销。')) return;
+      delete app.data.journals[d];
+      saveState(); renderJournalList(); renderJournalEditor(d);
+      showToast('日记已删除', 'warning');
+    });
+    const search = $('#journal-search'); if (search) search.addEventListener('input', renderJournalList);
+    const fresh = $('#btn-new-journal'); if (fresh) fresh.addEventListener('click', () => {
+      renderJournalEditor(todayStr());
+      $('#journal-editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    // 自动保存：正文停止输入 1.5 秒后静默保存
+    const content = $('#journal-content');
+    if (content) {
+      let timer = null;
+      content.addEventListener('input', () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          const d = journalEditingDate || todayStr();
+          const vals = {
+            title: ($('#journal-title') || {}).value || '',
+            content: content.value || '',
+            mood: journalMood,
+            tags: (($('#journal-tags') || {}).value || '').split(/[,，]/).map(s => s.trim()).filter(Boolean),
+            updatedAt: new Date().toISOString()
+          };
+          if (!vals.title.trim() && !vals.content.trim()) return;
+          if (!app.data.journals || typeof app.data.journals !== 'object') app.data.journals = {};
+          app.data.journals[d] = vals;
+          saveState(); renderJournalList();
+          const status = $('#journal-status'); if (status) status.textContent = '已自动保存 ' + new Date().toTimeString().slice(0, 5);
+        }, 1500);
+      });
+    }
+  }
+
+  /* ==========================================
+     v1.18 · Ctrl+K 命令面板
+     ========================================== */
+  let cmdItems = [];
+  let cmdIndex = 0;
+
+  function buildCommands() {
+    const list = [
+      { icon: '▶', title: '开始 / 暂停专注', hint: '计时', run: () => toggleTimer() },
+      { icon: '◎', title: '前往专注页', hint: '导航', run: () => switchView('focus') },
+      { icon: '☀', title: '前往今日', hint: '导航', run: () => switchView('today') },
+      { icon: '✓', title: '前往待办', hint: '导航', run: () => switchView('todos') },
+      { icon: '▦', title: '前往日程', hint: '导航', run: () => switchView('schedule') },
+      { icon: '▩', title: '前往日历', hint: '导航', run: () => switchView('calendar') },
+      { icon: '▤', title: '前往日记', hint: '导航', run: () => switchView('journal') },
+      { icon: '✎', title: '写一篇日记', hint: '日记', run: () => { switchView('journal'); renderJournalEditor(todayStr()); } },
+      { icon: '＋', title: '添加待办', hint: '创建', run: () => openModal('modal-todo') },
+      { icon: '＋', title: '添加日程', hint: '创建', run: () => openModal('modal-event') },
+      { icon: '🧹', title: '智能整理遗留任务', hint: '行动', run: () => { switchView('schedule'); renderReplan(); openModal('modal-replan'); } },
+      { icon: '💡', title: '生成今日洞察', hint: '数据', run: () => { const b = $('#btn-gen-insight'); if (b) b.click(); } },
+      { icon: '📷', title: '导出周报图片', hint: '导出', run: () => exportWeekPNG() },
+      { icon: '📄', title: '导出周报 CSV', hint: '导出', run: () => exportWeekCSV() },
+      { icon: '⬆', title: '检查更新', hint: '系统', run: () => { const b = $('#btn-check-update'); if (b) b.click(); } },
+      { icon: '◐', title: '切换下一套皮肤', hint: '外观', run: () => {
+        const keys = Object.keys(themes);
+        const i = keys.indexOf(getTheme());
+        applyTheme(keys[(i + 1) % keys.length]);
+        showToast('已切换到「' + themes[keys[(i + 1) % keys.length]].name + '」', 'success');
+      } }
+    ];
+    // 加入待办快捷项
+    (app.data.todos || []).filter(t => !t.completed).slice(0, 12).forEach(t => {
+      list.push({ icon: '•', title: t.title, hint: '待办 · 去专注', run: () => {
+        app.timer.linkedTodoId = t.id; renderFocusTodoSelect();
+        switchView('focus'); startTimer();
+        showToast('已开始专注 · ' + t.title, 'success');
+      } });
+    });
+    return list;
+  }
+
+  function renderCmdResults() {
+    const box = $('#cmd-results');
+    if (!box) return;
+    const q = (($('#cmd-input') && $('#cmd-input').value) || '').trim().toLowerCase();
+    cmdItems = buildCommands().filter(c => !q || (c.title + ' ' + c.hint).toLowerCase().indexOf(q) !== -1).slice(0, 12);
+    if (cmdIndex >= cmdItems.length) cmdIndex = 0;
+    if (!cmdItems.length) {
+      box.innerHTML = '<div class="cmd-empty">没有匹配的命令</div>';
+      return;
+    }
+    box.innerHTML = cmdItems.map((c, i) =>
+      `<div class="cmd-item${i === cmdIndex ? ' selected' : ''}" data-i="${i}">
+        <span class="cmd-item-icon">${c.icon}</span>
+        <span class="cmd-item-text"><span class="cmd-item-title">${escapeHtml(c.title)}</span><span class="cmd-item-hint">${escapeHtml(c.hint)}</span></span>
+      </div>`).join('');
+    $$('.cmd-item', box).forEach(el => {
+      el.addEventListener('click', () => runCmd(parseInt(el.dataset.i, 10)));
+      el.addEventListener('mouseenter', () => { cmdIndex = parseInt(el.dataset.i, 10); renderCmdResults(); });
+    });
+  }
+
+  function runCmd(i) {
+    const cmd = cmdItems[i];
+    if (!cmd) return;
+    closeCmd();
+    setTimeout(() => { try { cmd.run(); refresh(); } catch (e) { showToast('命令执行失败', 'warning'); } }, 40);
+  }
+
+  function openCmd() {
+    const overlay = $('#modal-command');
+    if (!overlay) return;
+    cmdIndex = 0;
+    const input = $('#cmd-input'); if (input) { input.value = ''; }
+    renderCmdResults();
+    overlay.classList.add('show');
+    setTimeout(() => { if (input) input.focus(); }, 30);
+  }
+
+  function closeCmd() {
+    const overlay = $('#modal-command');
+    if (overlay) overlay.classList.remove('show');
+  }
+
+  function initCommandPalette() {
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const overlay = $('#modal-command');
+        if (overlay && overlay.classList.contains('show')) closeCmd(); else openCmd();
+        return;
+      }
+      const overlay = $('#modal-command');
+      if (!overlay || !overlay.classList.contains('show')) return;
+      if (e.key === 'Escape') { e.preventDefault(); closeCmd(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); cmdIndex = Math.min(cmdItems.length - 1, cmdIndex + 1); renderCmdResults(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); cmdIndex = Math.max(0, cmdIndex - 1); renderCmdResults(); }
+      else if (e.key === 'Enter') { e.preventDefault(); runCmd(cmdIndex); }
+    });
+    const input = $('#cmd-input'); if (input) input.addEventListener('input', () => { cmdIndex = 0; renderCmdResults(); });
+    const overlay = $('#modal-command');
+    if (overlay) overlay.addEventListener('click', e => { if (e.target === overlay) closeCmd(); });
+  }
+
+  /* ==========================================
      应用内更新弹窗（替代系统原生对话框）
      ========================================== */
   function initUpdateUI() {
@@ -4075,6 +4491,8 @@
   function init() {
     if (!app.data.settings) app.data.settings = defaultData().settings;
     if (!app.data.reviews || typeof app.data.reviews !== 'object') app.data.reviews = {};
+    if (!app.data.insights || typeof app.data.insights !== 'object') app.data.insights = {};
+    if (!app.data.journals || typeof app.data.journals !== 'object') app.data.journals = {};
     if (!app.data.todos) app.data.todos = [];
     if (!app.data.events) app.data.events = [];
     if (!app.data.sessions) app.data.sessions = [];
@@ -4104,6 +4522,9 @@
     initSettingsCollapse();
     initPhaseModal();
     initInsightExports();
+    initInsightUI();
+    initJournal();
+    initCommandPalette();
     initScoreRecalcUI();
     initBackupUI();
     initBackup(); // 内部按检测结果决定是否弹新手引导，避免与恢复弹窗叠加

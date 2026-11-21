@@ -65,6 +65,13 @@
           </svg>
           <span>专注</span>
         </button>
+        <button class="sidebar-item" data-view="journal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            <line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="14" y2="11"/>
+          </svg>
+          <span>日记</span>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
@@ -169,6 +176,39 @@
                   <span class="mini-stat-num" id="today-event-count">0</span>
                   <span class="mini-stat-label">今日日程</span>
                 </div>
+              </div>
+            </div>
+
+            <!-- 当前专注位：首页中心锚点 -->
+            <div class="focus-now-card" id="focus-now-card">
+              <div class="fnc-main">
+                <div class="fnc-eyebrow" id="fnc-eyebrow">此刻 · 专注位</div>
+                <div class="fnc-headline" id="fnc-headline">准备开始</div>
+                <div class="fnc-detail" id="fnc-detail">选一件最该做的事，然后开始</div>
+                <div class="fnc-actions" id="fnc-actions"></div>
+              </div>
+              <div class="fnc-ring-wrap">
+                <svg class="fnc-ring" viewBox="0 0 120 120">
+                  <circle class="fnc-ring-bg" cx="60" cy="60" r="52"/>
+                  <circle class="fnc-ring-fill" id="fnc-ring-fill" cx="60" cy="60" r="52"/>
+                </svg>
+                <div class="fnc-ring-text">
+                  <span id="fnc-time">00:00</span>
+                  <small id="fnc-ring-label">待开始</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- 今日洞察卡 -->
+            <div class="daily-insight" id="daily-insight">
+              <div class="di-head">
+                <span class="di-title">💡 今日一句</span>
+                <span class="di-sub" id="di-date"></span>
+              </div>
+              <p class="di-text" id="di-text">开始专注后，这里会出现属于今天的观察。</p>
+              <div class="di-actions">
+                <button class="btn-link" id="btn-gen-insight" type="button">生成今日洞察</button>
+                <button class="btn-link" id="btn-goto-timeline" type="button">看时光轴 →</button>
               </div>
             </div>
 
@@ -490,6 +530,15 @@
             </div>
           </div>
 
+          <!-- 洞察时光轴 -->
+          <div class="insight-timeline" id="insight-timeline">
+            <div class="wn-head">
+              <span class="wn-title">🕰 洞察时光轴</span>
+              <span class="wn-sub" id="timeline-count">0 条记录</span>
+            </div>
+            <div class="timeline-list" id="timeline-list"></div>
+          </div>
+
           <!-- 成就墙（游戏化） -->
           <div class="ach-wall" id="ach-wall">
             <div class="wn-head">
@@ -498,6 +547,49 @@
             </div>
             <p class="ach-hint" id="ach-hint"></p>
             <div class="ach-grid" id="ach-grid"></div>
+          </div>
+        </section>
+
+        <!-- ========== 日记 ========== -->
+        <section id="view-journal" class="view">
+          <div class="view-header">
+            <h2>日记</h2>
+            <button class="btn-primary btn-sm" id="btn-new-journal" type="button">✎ 写今天的日记</button>
+          </div>
+
+          <div class="journal-editor" id="journal-editor">
+            <div class="je-head">
+              <div>
+                <input type="date" id="journal-date" class="je-date">
+                <span class="je-status" id="journal-status">自动保存到本机</span>
+              </div>
+              <button class="btn-link" id="btn-journal-snapshot" type="button">插入今日数据</button>
+            </div>
+            <input type="text" id="journal-title" class="je-title" placeholder="给今天起个标题（可留空）" maxlength="80">
+            <div class="je-moods" id="je-moods">
+              <button type="button" data-mood="😊" title="开心">😊</button>
+              <button type="button" data-mood="😌" title="平静">😌</button>
+              <button type="button" data-mood="😔" title="低落">😔</button>
+              <button type="button" data-mood="😤" title="烦躁">😤</button>
+              <button type="button" data-mood="🥳" title="兴奋">🥳</button>
+              <button type="button" data-mood="😴" title="疲惫">😴</button>
+            </div>
+            <textarea id="journal-content" class="je-content" placeholder="今天发生了什么？写下来，就留在你自己的电脑里。&#10;&#10;可以写工作、生活、情绪，或者只是一句想记住的话。"></textarea>
+            <div class="je-foot">
+              <input type="text" id="journal-tags" class="je-tags" placeholder="标签，用逗号分隔（如：生活, 灵感）">
+              <div class="je-actions">
+                <button class="btn-secondary btn-sm" id="btn-journal-delete" type="button">删除</button>
+                <button class="btn-primary btn-sm" id="btn-journal-save" type="button">保存日记</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="journal-list-wrap">
+            <div class="journal-toolbar">
+              <h3>往日记录 <span id="journal-count" class="journal-count">0</span></h3>
+              <input type="text" id="journal-search" class="journal-search" placeholder="搜索日记…">
+            </div>
+            <div class="journal-list" id="journal-list"></div>
           </div>
         </section>
 
@@ -1302,6 +1394,23 @@
           <button id="float-size-m" style="background:var(--primary-pale);color:var(--primary);border-color:var(--primary)">M</button>
           <button id="float-size-l">L</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ctrl+K 命令面板 -->
+  <div class="modal-overlay cmd-overlay" id="modal-command">
+    <div class="cmd-panel">
+      <div class="cmd-search">
+        <span class="cmd-icon">⌕</span>
+        <input type="text" id="cmd-input" placeholder="输入命令或搜索…" autocomplete="off">
+        <kbd>Esc</kbd>
+      </div>
+      <div class="cmd-results" id="cmd-results"></div>
+      <div class="cmd-footer">
+        <span><kbd>↑</kbd><kbd>↓</kbd> 选择</span>
+        <span><kbd>↵</kbd> 执行</span>
+        <span><kbd>Esc</kbd> 关闭</span>
       </div>
     </div>
   </div>
