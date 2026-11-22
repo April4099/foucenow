@@ -52,6 +52,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopFocusMonitor: () => ipcRenderer.invoke('focus-monitor-stop'),
   setDistractionApps: (cfg) => ipcRenderer.invoke('focus-monitor-set-apps', cfg),
   onFocusDistractionTime: (callback) => ipcRenderer.on('focus-distraction-time', (event, info) => callback(info)),
+  // 离开检测：键鼠无动作按「时长 + 次数」计入分心
+  startIdleMonitor: (cfg) => ipcRenderer.invoke('focus-idle-start', cfg),
+  stopIdleMonitor: () => ipcRenderer.invoke('focus-idle-stop'),
+  onFocusIdleTime: (callback) => ipcRenderer.on('focus-idle-time', (event, info) => callback(info)),
   // 自动本地备份（主进程 userData/backups）
   backupSave: (json) => ipcRenderer.invoke('backup-save', json),
   backupList: () => ipcRenderer.invoke('backup-list'),

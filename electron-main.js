@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, shell, ipcMain, Notification, globalShortcut } = require('electron');
+const { app, BrowserWindow, Menu, Tray, shell, ipcMain, Notification, globalShortcut, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -470,6 +470,59 @@ ipcMain.handle('focus-monitor-set-apps', (e, cfg) => {
   fgMonitor.allow = c.allow;
   return { status: 'set' };
 });
+
+/* ========== 离开检测：键鼠长时间无动作视为分心 ========== */
+const IDLE_POLL_SEC = 2;
+let idleMonitor = { active: false, thresholdSec: 30, timer: null, inIdle: false, lastTickAt: 0 };
+
+function tickIdle() {
+  if (!idleMonitor.active) return;
+  const now = Date.now();
+  // 用真实间隔累计：窗口被系统节流时也不会少算时长，上限 30 秒防异常跳变
+  const elapsedSec = idleMonitor.lastTickAt
+    ? Math.min(30, Math.max(0, (now - idleMonitor.lastTickAt) / 1000))
+    : IDLE_POLL_SEC;
+  idleMonitor.lastTickAt = now;
+
+  let sysIdle = 0;
+  try { sysIdle = powerMonitor.getSystemIdleTime(); } catch (e) { return; }
+  if (typeof sysIdle !== 'number' || !isFinite(sysIdle) || sysIdle < 0) return;
+
+  const away = sysIdle >= idleMonitor.thresholdSec;
+  if (away) {
+    const entered = !idleMonitor.inIdle;
+    idleMonitor.inIdle = true;
+    // 首次进入补偿越过阈值前的那段空档；上限 10 分钟避免锁屏整天把一次会话炸掉
+    const seconds = entered
+      ? Math.min(600, Math.max(IDLE_POLL_SEC, sysIdle - idleMonitor.thresholdSec + IDLE_POLL_SEC))
+      : elapsedSec;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('focus-idle-time', { seconds, entered, source: 'idle', totalIdleSec: sysIdle });
+    }
+  } else {
+    idleMonitor.inIdle = false;
+  }
+}
+
+function startIdleMonitor(cfg) {
+  const t = Number(cfg && cfg.thresholdSec);
+  idleMonitor.thresholdSec = isFinite(t) ? Math.max(10, Math.min(300, t)) : 30;
+  idleMonitor.active = true;
+  idleMonitor.inIdle = false;
+  idleMonitor.lastTickAt = Date.now();
+  if (idleMonitor.timer) clearInterval(idleMonitor.timer);
+  idleMonitor.timer = setInterval(tickIdle, IDLE_POLL_SEC * 1000);
+}
+
+function stopIdleMonitor() {
+  idleMonitor.active = false;
+  idleMonitor.inIdle = false;
+  idleMonitor.lastTickAt = 0;
+  if (idleMonitor.timer) { clearInterval(idleMonitor.timer); idleMonitor.timer = null; }
+}
+
+ipcMain.handle('focus-idle-start', (e, cfg) => { startIdleMonitor(cfg); return { status: 'started' }; });
+ipcMain.handle('focus-idle-stop', () => { stopIdleMonitor(); return { status: 'stopped' }; });
 
 /* ========== 自动本地备份（防重装 / 清数据导致的历史归零） ========== */
 const BACKUP_KEEP = 7;

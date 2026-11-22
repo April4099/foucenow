@@ -85,7 +85,7 @@
     wechat: '微信', qq: 'QQ', chrome: 'Chrome', msedge: 'Edge', firefox: 'Firefox',
     steam: 'Steam', douyin: '抖音', bilibili: 'B站', neteasecloudmusic: '网易云音乐',
     spotify: 'Spotify', slack: 'Slack', discord: 'Discord', zoom: 'Zoom',
-    unknown: '未识别'
+    away: '离开电脑', unknown: '未识别'
   };
   function normalizeAppKey(name) {
     let k = String(name || 'unknown').toLowerCase().replace(/\.exe$/, '').trim() || 'unknown';
@@ -141,7 +141,9 @@
         soundEnabled: true,
         notifEnabled: true,
         peakRemindEnabled: true,
-        shortcutsEnabled: true
+        shortcutsEnabled: true,
+        idleDetectEnabled: true,
+        idleThresholdSec: 30
       }
     };
   }
@@ -172,6 +174,8 @@
       distractions: 0,
       distractionSec: 0,
       distractionByApp: {},
+      idleSec: 0,
+      idleCount: 0,
       intention: '',
       pauses: 0
     },
@@ -1367,7 +1371,7 @@
             <span class="day-item-time">${s.durationMin}分</span>
             <span class="day-item-title">${todo ? escapeHtml(todo.title) : '独立专注'}</span>
             ${catBadge(s.category || '专注')}
-            ${s.focusScore != null ? `<span class="day-quality" title="专注质量 ${s.focusScore} 分（分心 ${s.distractions || 0} 次 / 暂停 ${s.pauses || 0} 次）">${qualityIcon(s.focusScore)}</span>` : ''}
+            ${s.focusScore != null ? `<span class="day-quality" title="专注质量 ${s.focusScore} 分（切走 ${s.distractions || 0} 段 / 离开 ${s.idleCount || 0} 次 / 暂停 ${s.pauses || 0} 次）">${qualityIcon(s.focusScore)}</span>` : ''}
             ${s.intention ? `<span class="day-item-intention">🎯 ${escapeHtml(s.intention)}</span>` : ''}
           </div>`;
         }).join('')
@@ -1525,7 +1529,9 @@
     else trendChip = { label: '环比上周', value: '持平', tone: 'neutral' };
 
     // 分心口径升级为「停留时长占比」；老数据无时长字段时按每次 20 秒估算
-    const distSec = ws.reduce((a, s) => a + (typeof s.distractionSec === 'number' ? s.distractionSec : (s.distractions || 0) * 20), 0);
+    const distSec = ws.reduce((a, s) => a
+      + (typeof s.distractionSec === 'number' ? s.distractionSec : (s.distractions || 0) * 20)
+      + (s.idleSec || 0), 0);
     const distPct = Math.round(distSec / Math.max(totalMin * 60, 1) * 100);
     let distChip;
     if (distPct === 0) distChip = { label: '分心占比', value: '0% · 零分心', tone: 'good' };
@@ -1579,7 +1585,8 @@
     (app.data.sessions || []).forEach(s => {
       if (!inRange.has(s.date)) return;
       byDay[s.date].min += s.durationMin || 0;
-      byDay[s.date].sec += typeof s.distractionSec === 'number' ? s.distractionSec : (s.distractions || 0) * 20;
+      byDay[s.date].sec += (typeof s.distractionSec === 'number' ? s.distractionSec : (s.distractions || 0) * 20)
+        + (s.idleSec || 0);
       byDay[s.date].n += 1;
       const detail = s.distractionByApp || {};
       Object.keys(detail).forEach(k => { dist[k] = (dist[k] || 0) + (detail[k] || 0); });
@@ -1715,14 +1722,14 @@
     const rows = getWeekSessions();
     if (!rows.length) { showToast('最近 7 天还没有专注记录', 'warning'); return; }
     const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const head = ['日期', '开始时间', '时长(分钟)', '分类', '关联任务', '质量分', '分心秒数', '分心来源'];
+    const head = ['日期', '开始时间', '时长(分钟)', '分类', '关联任务', '质量分', '分心秒数', '离开秒数', '离开次数', '分心来源'];
     const lines = rows.map(s => {
       const todo = s.todoId ? (app.data.todos || []).find(t => t.id === s.todoId) : null;
       const detail = s.distractionByApp || {};
       const apps = Object.keys(detail).map(k => appLabel(k) + ' ' + Math.round(detail[k] / 60) + '分').join('；');
       return [s.date, (s.startTime || '').slice(11, 16) || '', s.durationMin || 0,
         s.category || '其他', todo ? todo.text : '', s.focusScore == null ? '' : s.focusScore,
-        s.distractionSec || 0, apps].map(esc).join(',');
+        s.distractionSec || 0, s.idleSec || 0, s.idleCount || 0, apps].map(esc).join(',');
     });
     const csv = '\ufeff' + [head.map(esc).join(','), ...lines].join('\r\n');
     downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), 'FocusNow-周报-' + todayStr() + '.csv');
@@ -1810,7 +1817,8 @@
       sessions.forEach(s => {
         if (s.legacyFocusScore == null) s.legacyFocusScore = s.focusScore == null ? null : s.focusScore;
         const dSec = (typeof s.distractionSec === 'number') ? s.distractionSec : (s.distractions || 0) * 20;
-        const next = computeFocusScore(s.durationMin || 0, s.distractions || 0, s.pauses || 0, dSec);
+        const next = computeFocusScore(s.durationMin || 0, s.distractions || 0, s.pauses || 0,
+          dSec, s.idleSec || 0, s.idleCount || 0);
         if (s.focusScore !== next) { s.focusScore = next; changed++; }
       });
       if (!app.data.settings) app.data.settings = defaultData().settings;
@@ -1900,6 +1908,8 @@
     app.timer.distractions = 0;
     app.timer.distractionSec = 0;
     app.timer.distractionByApp = {};
+    app.timer.idleSec = 0;
+    app.timer.idleCount = 0;
     const intentionEl = $('#intention-input');
     app.timer.intention = intentionEl ? (intentionEl.value || '').trim() : '';
     app.timer.pauses = 0;
@@ -1907,6 +1917,10 @@
     // 启动前台「分心应用」监控（仅桌面端 Windows 生效）：名单 + 豁免白名单
     if (window.electronAPI && window.electronAPI.startFocusMonitor) {
       window.electronAPI.startFocusMonitor(buildFgCfg());
+    }
+    // 启动离开检测：键鼠无动作超过阈值即计入分心
+    if (idleEnabled() && window.electronAPI && window.electronAPI.startIdleMonitor) {
+      window.electronAPI.startIdleMonitor(buildIdleCfg());
     }
 
     if (app.timer.mode === 'stopwatch') {
@@ -1933,6 +1947,7 @@
     clearInterval(app.timer.intervalId);
     app.timer.intervalId = null;
     if (window.electronAPI && window.electronAPI.stopFocusMonitor) window.electronAPI.stopFocusMonitor();
+    if (window.electronAPI && window.electronAPI.stopIdleMonitor) window.electronAPI.stopIdleMonitor();
     updateTimerControls();
   }
 
@@ -1956,6 +1971,7 @@
   function timerComplete(skipped) {
     closeShieldIfOpen();
     if (window.electronAPI && window.electronAPI.stopFocusMonitor) window.electronAPI.stopFocusMonitor();
+    if (window.electronAPI && window.electronAPI.stopIdleMonitor) window.electronAPI.stopIdleMonitor();
     // 提示音由 announcePhaseEnd 统一播放（区分专注结束 / 休息结束），避免与旧提示音叠加
 
     const focusPhases = ['work', 'custom', 'stopwatch'];
@@ -1981,9 +1997,12 @@
         distractions: app.timer.distractions || 0,
         distractionSec: app.timer.distractionSec || 0,
         distractionByApp: Object.assign({}, app.timer.distractionByApp || {}),
+        idleSec: app.timer.idleSec || 0,
+        idleCount: app.timer.idleCount || 0,
         intention: app.timer.intention || '',
         pauses: app.timer.pauses || 0,
-        focusScore: computeFocusScore(elapsedMin, app.timer.distractions || 0, app.timer.pauses || 0, app.timer.distractionSec || 0)
+        focusScore: computeFocusScore(elapsedMin, app.timer.distractions || 0, app.timer.pauses || 0,
+          app.timer.distractionSec || 0, app.timer.idleSec || 0, app.timer.idleCount || 0)
       });
       saveState();
       maybeBackup();
@@ -2023,18 +2042,28 @@
   function buildFgCfg() {
     return { apps: app.data.distractionApps || [], allow: app.data.distractionAllow || [] };
   }
+  function buildIdleCfg() {
+    const s = app.data.settings || {};
+    return { thresholdSec: s.idleThresholdSec || 30 };
+  }
+  const idleEnabled = () => !!(app.data.settings && app.data.settings.idleDetectEnabled !== false);
 
   // 评分以「分心停留时长占本次专注的比例」为主，而非切换次数：
   // 在微信待 10 分钟应远比瞄一眼 8 个窗口严重。老数据无时长字段时按每次 20 秒估算。
-  function computeFocusScore(min, distractions, pauses, distractionSec) {
+  // v1.19：键鼠无动作的「离开电脑」按时长并入分心占比，另按离开次数额外扣分。
+  function computeFocusScore(min, distractions, pauses, distractionSec, idleSec, idleCount) {
     if (!min || min <= 0) return 0;
     const totalSec = Math.max(min * 60, 1);
     const dSec = (typeof distractionSec === 'number')
       ? distractionSec
       : (distractions || 0) * 20;
-    const ratio = Math.min(1, dSec / totalSec);
+    const awaySec = Math.max(0, Number(idleSec) || 0);
+    const ratio = Math.min(1, (dSec + awaySec) / totalSec);
     let score = 100 - ratio * 100 * 1.2;
     score -= Math.min(pauses || 0, 6) * 3;
+    // 频繁离席比一次长离开更伤：每次扣 2 分，最多扣 12 分；没有离开时长则不扣
+    const awayN = Math.max(0, Number(idleCount) || 0);
+    if (awaySec > 0 && awayN > 0) score -= Math.min(12, awayN * 2);
     if (min < 10) score += 8; // 短会话适度放宽
     return Math.max(0, Math.min(100, Math.round(score)));
   }
@@ -2089,7 +2118,7 @@
     { id: 'deep90', emoji: '🧠', name: '深度沉浸', desc: '单次专注 ≥ 90 分钟', check: () => app.data.sessions.some(s => (s.durationMin || 0) >= 90) },
     { id: 'perfect100', emoji: '✨', name: '满分时刻', desc: '单次专注质量分 100', check: () => app.data.sessions.some(s => (s.focusScore || 0) === 100) },
     { id: 'week_full', emoji: '📅', name: '全勤一周', desc: '过去 7 天每天都有专注', check: () => { const t = todayStr(); const set = new Set(app.data.sessions.map(s => s.date)); for (let i = 0; i < 7; i++) if (!set.has(addDays(t, -i))) return false; return true; } },
-    { id: 'clean_day', emoji: '🍃', name: '心无旁骛', desc: '单日 ≥3 次专注且零分心', check: () => { const byDate = {}; app.data.sessions.forEach(s => { if (!byDate[s.date]) byDate[s.date] = { n: 0, d: 0 }; byDate[s.date].n++; byDate[s.date].d += (s.distractions || 0); }); return Object.values(byDate).some(o => o.n >= 3 && o.d === 0); } },
+    { id: 'clean_day', emoji: '🍃', name: '心无旁骛', desc: '单日 ≥3 次专注且零分心', check: () => { const byDate = {}; app.data.sessions.forEach(s => { if (!byDate[s.date]) byDate[s.date] = { n: 0, d: 0 }; byDate[s.date].n++; byDate[s.date].d += (s.distractions || 0) + (s.idleCount || 0); }); return Object.values(byDate).some(o => o.n >= 3 && o.d === 0); } },
     { id: 'early_bird', emoji: '🌅', name: '早起鸟', desc: '在 8:00 前开始过专注', check: () => app.data.sessions.some(s => { const h = s.startTime ? new Date(s.startTime).getHours() : 12; return h < 8; }) }
   ];
 
@@ -2202,6 +2231,19 @@
       });
     }
 
+    // 离开检测：系统级键鼠空闲，与「切走应用」检测并行，独立记时长与次数
+    if (window.electronAPI && window.electronAPI.onFocusIdleTime) {
+      window.electronAPI.onFocusIdleTime(info => {
+        if (!canCount() || !idleEnabled()) return;
+        const sec = (info && info.seconds) || 0;
+        if (!sec) return;
+        app.timer.idleSec = (app.timer.idleSec || 0) + sec;
+        if (info && info.entered) app.timer.idleCount = (app.timer.idleCount || 0) + 1;
+        bumpApp('away', sec);
+        updateLiveDistractions();
+      });
+    }
+
     // 「刚才那段是正事」：一键把本次分心归零，避免误判污染质量分
     const clearBtn = document.getElementById('btn-clear-distraction');
     if (clearBtn) {
@@ -2209,6 +2251,8 @@
         app.timer.distractions = 0;
         app.timer.distractionSec = 0;
         app.timer.distractionByApp = {};
+        app.timer.idleSec = 0;
+        app.timer.idleCount = 0;
         updateLiveDistractions();
         showToast('已把本次分心归零，这段不算 ✨', 'success');
       });
@@ -2219,15 +2263,21 @@
   function updateLiveDistractions() {
     const el = document.getElementById('live-distractions');
     if (!el) return;
-    const sec = app.timer.distractionSec || 0;
-    const n = app.timer.distractions || 0;
-    const label = sec >= 60
-      ? Math.floor(sec / 60) + ' 分' + (sec % 60 ? ' ' + (sec % 60) + ' 秒' : '')
-      : sec + ' 秒';
+    const dSec = app.timer.distractionSec || 0;
+    const iSec = app.timer.idleSec || 0;
+    const iN = app.timer.idleCount || 0;
+    const sec = dSec + iSec;
+    const n = (app.timer.distractions || 0) + iN;
+    const fmt = s => s >= 60
+      ? Math.floor(s / 60) + ' 分' + (s % 60 ? ' ' + (s % 60) + ' 秒' : '')
+      : s + ' 秒';
     const has = sec > 0 || n > 0;
-    el.textContent = has
-      ? (sec > 0 ? '本次分心 ' + label + '（' + n + ' 段）' : '本次分心 ' + n + ' 次')
-      : '';
+    let text = '';
+    if (has) {
+      text = sec > 0 ? '本次分心 ' + fmt(sec) + '（' + n + ' 段）' : '本次分心 ' + n + ' 次';
+      if (iSec > 0) text += ' · 其中离开 ' + fmt(iSec) + ' / ' + iN + ' 次';
+    }
+    el.textContent = text;
     el.classList.toggle('active', has);
     const btn = document.getElementById('btn-clear-distraction');
     if (btn) btn.style.display = has ? '' : 'none';
@@ -2745,7 +2795,14 @@
     const longEl = $('#setting-pomo-long');
     const peakEl = $('#setting-peak-remind');
     const shortcutsEl = $('#setting-shortcuts');
+    const idleEl = $('#setting-idle-detect');
+    const idleSecEl = $('#setting-idle-threshold');
 
+    if (idleEl) idleEl.checked = s.idleDetectEnabled !== false;
+    if (idleSecEl) {
+      idleSecEl.value = s.idleThresholdSec || 30;
+      idleSecEl.disabled = idleEl ? !idleEl.checked : false;
+    }
     if (shortcutsEl) shortcutsEl.checked = s.shortcutsEnabled !== false;
     if (soundEl) soundEl.checked = s.soundEnabled !== false;
     if (notifyEl) notifyEl.checked = s.notifEnabled !== false;
@@ -2813,6 +2870,31 @@
         try { await window.electronAPI.setShortcuts(shortcutsEl.checked); } catch (e) { /* ignore */ }
       }
       showToast(shortcutsEl.checked ? '全局快捷键已开启 ⌨' : '全局快捷键已关闭', 'success');
+    });
+
+    // 离开检测：开关与判定阈值，改动时同步主进程（正在计时才需要重启监控）
+    const idleEl = $('#setting-idle-detect');
+    const idleSecEl = $('#setting-idle-threshold');
+    if (idleEl) idleEl.addEventListener('change', () => {
+      app.data.settings.idleDetectEnabled = idleEl.checked;
+      saveState();
+      if (idleSecEl) idleSecEl.disabled = !idleEl.checked;
+      if (!idleEl.checked) {
+        if (window.electronAPI && window.electronAPI.stopIdleMonitor) window.electronAPI.stopIdleMonitor();
+      } else if (app.timer.running && window.electronAPI && window.electronAPI.startIdleMonitor) {
+        window.electronAPI.startIdleMonitor(buildIdleCfg());
+      }
+      showToast(idleEl.checked ? '离开检测已开启 🚶' : '离开检测已关闭', 'success');
+    });
+    if (idleSecEl) idleSecEl.addEventListener('change', () => {
+      const v = Math.max(10, Math.min(300, parseInt(idleSecEl.value) || 30));
+      idleSecEl.value = v;
+      app.data.settings.idleThresholdSec = v;
+      saveState();
+      if (app.timer.running && idleEnabled() && window.electronAPI && window.electronAPI.startIdleMonitor) {
+        window.electronAPI.startIdleMonitor(buildIdleCfg());
+      }
+      showToast('离开判定阈值已设为 ' + v + ' 秒', 'success');
     });
 
     // 每日目标
@@ -3856,8 +3938,11 @@
         ? (app.data.todos.find(x => x.id === t.linkedTodoId) || {}).title
         : null) || (isBreak ? '放松一下，等会儿继续' : '专注进行中');
       headline.textContent = title;
-      const sec = t.distractionSec || 0;
-      const distText = sec > 0 ? `<span class="fnc-focus-tag">分心 ${sec >= 60 ? Math.floor(sec / 60) + '分' : sec + '秒'}</span>` : '';
+      const sec = (t.distractionSec || 0) + (t.idleSec || 0);
+      const awayN = t.idleCount || 0;
+      const distText = sec > 0
+        ? `<span class="fnc-focus-tag">分心 ${sec >= 60 ? Math.floor(sec / 60) + '分' : sec + '秒'}${awayN ? ' · 离开 ' + awayN + ' 次' : ''}</span>`
+        : '';
       detail.innerHTML = (isBreak ? '休息时不计分心，安心放松' : '保持这个节奏，别切走') + distText;
       actions.innerHTML = '<button class="btn-primary btn-sm" id="fnc-go-focus">查看专注页</button>'
         + (t.running ? '<button class="btn-secondary btn-sm" id="fnc-pause">暂停</button>' : '<button class="btn-secondary btn-sm" id="fnc-resume">继续</button>');

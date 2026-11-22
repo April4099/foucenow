@@ -664,6 +664,26 @@
               </div>
               <div class="setting-row">
                 <div class="setting-info">
+                  <span class="setting-label">🚶 离开检测</span>
+                  <span class="setting-desc">键盘和鼠标长时间无动作视为分心，按时长与次数扣质量分</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-idle-detect" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-row" id="row-idle-threshold">
+                <div class="setting-info">
+                  <span class="setting-label">⏱️ 判定为离开的时长</span>
+                  <span class="setting-desc">键鼠无操作超过该秒数开始计入分心，10–300 秒可调</span>
+                </div>
+                <div class="setting-input-group">
+                  <input type="number" id="setting-idle-threshold" value="30" min="10" max="300" step="5">
+                  <span class="setting-unit">秒</span>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
                   <span class="setting-label">📊 每日专注目标</span>
                   <span class="setting-desc">每天的专注时间目标（分钟）</span>
                 </div>
