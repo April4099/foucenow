@@ -495,6 +495,7 @@
     let next = null;
 
     for (const ev of app.data.events) {
+      if (ev.completed) continue; // 已完成的任务不再产生任何主页提示
       if (ev.notified && ev.repeat === 'none') continue;
       if (ev.date > today) continue;
 
@@ -1169,6 +1170,7 @@
     const today = todayStr();
 
     app.data.events.forEach(ev => {
+      if (ev.completed) return; // 已完成的任务不再弹提醒
       if (ev.notified && ev.repeat === 'none') return;
       if (ev.reminder < 0) return;
 
@@ -3901,10 +3903,10 @@
     const today = todayStr();
     const now = nowHM();
     // 优先：正在进行的日程
-    const ongoing = getEventsForDate(today).find(e => e.start <= now && (!e.end || e.end >= now));
+    const ongoing = getEventsForDate(today).find(e => !e.completed && e.start <= now && (!e.end || e.end >= now));
     if (ongoing) return { kind: 'event', title: ongoing.title, sub: '日程进行中 · ' + ongoing.start, ref: ongoing };
     // 其次：下一个日程（2 小时内）
-    const next = getEventsForDate(today).filter(e => e.start > now).sort((a, b) => a.start.localeCompare(b.start))[0];
+    const next = getEventsForDate(today).filter(e => !e.completed && e.start > now).sort((a, b) => a.start.localeCompare(b.start))[0];
     if (next) {
       const diff = minutesFromHM(next.start) - minutesFromHM(now);
       if (diff <= 120) return { kind: 'event', title: next.title, sub: diff + ' 分钟后开始 · ' + next.start, ref: next };
